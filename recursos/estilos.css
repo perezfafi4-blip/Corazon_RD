@@ -1170,13 +1170,36 @@ section {
 /* =====================================================================
    📱 SOLO TELÉFONO: en PC estos elementos quedan ocultos y nada cambia
    ===================================================================== */
+.barra-movil,
 .btn-menu-movil,
-.btn-auth-movil,
-.menu-overlay {
+.btn-auth-movil {
     display: none;
 }
 
+/* En PC el contenedor del panel no afecta el diseño de la barra de acceso */
+.acceso-panel {
+    display: contents;
+}
+
 @media (max-width: 768px) {
+    html,
+    body {
+        overflow-x: hidden;
+        max-width: 100%;
+    }
+
+    body {
+        padding-top: 64px;
+    }
+
+    section {
+        scroll-margin-top: 76px;
+    }
+
+    body.menu-abierto {
+        overflow: hidden;
+    }
+
     /* --- Contenido a todo el ancho --- */
     .main-content {
         width: 100%;
@@ -1187,30 +1210,63 @@ section {
         width: 100%;
     }
 
+    /* --- Barra negra superior con el logo a la izquierda --- */
+    .barra-movil {
+        display: flex;
+        align-items: center;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        padding: 0 14px;
+        background: #000000;
+        border-bottom: 3px solid transparent;
+        border-image: linear-gradient(
+            to right,
+            var(--flag-red) 0%, var(--flag-red) 33.33%,
+            var(--flag-white) 33.33%, var(--flag-white) 66.66%,
+            var(--flag-blue) 66.66%, var(--flag-blue) 100%
+        ) 1;
+        z-index: 10008;
+    }
+
+    .logo-barra-movil {
+        display: flex;
+        align-items: center;
+        height: 100%;
+    }
+
+    .logo-barra-movil img {
+        height: 44px;
+        width: auto;
+        max-width: 150px;
+        object-fit: contain;
+        display: block;
+    }
+
     /* --- Botón de tres rayas (arriba a la derecha) --- */
     .btn-menu-movil {
         position: fixed;
-        top: 12px;
-        right: 12px;
-        z-index: 10010;
-        width: 46px;
-        height: 46px;
+        top: 8px;
+        right: 10px;
+        z-index: 10012;
+        width: 48px;
+        height: 48px;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        gap: 5px;
-        background: rgba(12, 12, 12, 0.85);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+        gap: 6px;
+        background: transparent;
+        border: 0;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
     }
 
     .btn-menu-movil .raya {
         display: block;
-        width: 22px;
+        width: 30px;
         height: 3px;
         background: #ffffff;
         border-radius: 2px;
@@ -1218,85 +1274,128 @@ section {
     }
 
     /* las tres rayas se vuelven una X cuando el menú está abierto */
-    body.menu-abierto .btn-menu-movil .raya:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+    body.menu-abierto .btn-menu-movil .raya:nth-child(1) { transform: translateY(9px) rotate(45deg); }
     body.menu-abierto .btn-menu-movil .raya:nth-child(2) { opacity: 0; }
-    body.menu-abierto .btn-menu-movil .raya:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+    body.menu-abierto .btn-menu-movil .raya:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
 
-    /* --- Menú lateral escondido: sale y se guarda deslizando --- */
-    aside.sidebar,
+    /* --- Menú a pantalla completa, enlaces centrados --- */
     aside.sidebar-border {
-        transform: translateX(110%);
-        transition: transform 0.35s ease;
+        display: none;
     }
 
     aside.sidebar {
-        width: min(265px, 82vw);
-        justify-content: flex-start;
-        padding-top: 78px;
-    }
-
-    aside.sidebar-border {
-        width: min(277px, 86vw);
-    }
-
-    body.menu-abierto aside.sidebar,
-    body.menu-abierto aside.sidebar-border {
-        transform: translateX(0);
-    }
-
-    .menu-overlay {
-        display: block;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.6);
-        z-index: 9998;
+        left: 0;
+        right: 0;
+        top: 0;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        clip-path: none;
+        box-shadow: none;
+        justify-content: center;
+        padding: 90px 24px 40px 24px;
+        background-color: #0b0b0b;
+        background-image:
+            linear-gradient(rgba(8, 8, 8, 0.9), rgba(8, 8, 8, 0.94)),
+            var(--patron-url, none);
         opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        z-index: 10000;
     }
 
-    body.menu-abierto .menu-overlay {
+    body.menu-abierto aside.sidebar {
         opacity: 1;
-        pointer-events: auto;
+        visibility: visible;
     }
 
-    /* --- Acceso de usuario: un solo icono que abre y guarda los botones --- */
+    .sidebar-logo {
+        display: none;
+    }
+
+    .sidebar-nav {
+        gap: 26px;
+    }
+
+    .sidebar-nav a {
+        font-size: 1.25rem;
+        letter-spacing: 2px;
+    }
+
+    .sidebar-socials {
+        margin-top: 44px;
+        gap: 22px;
+    }
+
+    .sidebar-socials svg {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* --- Acceso de usuario: icono junto a las tres rayas --- */
     .top-left-auth {
-        top: 12px;
-        left: 12px;
-        max-width: calc(100vw - 84px);
-        padding: 5px;
-        gap: 8px;
+        top: 9px;
+        left: auto;
+        right: 64px;
+        z-index: 10011;
+        padding: 0;
+        gap: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        border-radius: 0;
     }
 
     .btn-auth-movil {
-        width: 38px;
-        height: 38px;
+        width: 46px;
+        height: 46px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: var(--flag-red);
-        border: 0;
+        background: transparent;
+        border: 2px solid rgba(255, 255, 255, 0.85);
         border-radius: 50%;
         color: #ffffff;
         cursor: pointer;
-        flex-shrink: 0;
         -webkit-tap-highlight-color: transparent;
     }
 
     .btn-auth-movil svg {
-        width: 22px;
-        height: 22px;
+        width: 24px;
+        height: 24px;
         fill: currentColor;
     }
 
     .btn-auth-movil .icono-cerrar { display: none; }
+    .top-left-auth.abierto .btn-auth-movil { background: var(--flag-red); border-color: var(--flag-red); }
     .top-left-auth.abierto .btn-auth-movil .icono-usuario { display: none; }
     .top-left-auth.abierto .btn-auth-movil .icono-cerrar { display: block; }
 
-    /* cerrado: solo se ve el icono */
-    .top-left-auth:not(.abierto) > :not(.btn-auth-movil) {
-        display: none !important;
+    /* panel con los botones: cerrado = escondido */
+    .acceso-panel {
+        display: none;
+    }
+
+    .top-left-auth.abierto .acceso-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        position: absolute;
+        top: 56px;
+        right: -54px;
+        width: 220px;
+        padding: 14px;
+        background: rgba(12, 12, 12, 0.97);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .acceso-panel .usuario-badge {
+        text-align: center;
     }
 
     /* --- Ajustes de tamaño para pantallas pequeñas --- */
