@@ -509,7 +509,34 @@ section:nth-of-type(4n) .content-box {
     border-top: 2px solid rgba(206, 17, 38, 0.36);
 }
 
-/* Sección Quiénes Somos completa: fondo blanco de inicio a fin */
+/* =================================================================
+   SECCIÓN IDEALES: FONDO AZUL BANDERA DOMINICANA (#002D62)
+   ================================================================= */
+.seccion-ideales,
+.seccion-ideales .seccion-marco,
+.seccion-ideales .content-box.ideales-box,
+section.seccion-ideales:nth-of-type(n) .content-box {
+    background: var(--flag-blue) !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #ffffff !important;
+    border-top: 2px solid rgba(255, 255, 255, 0.22) !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.22) !important;
+}
+
+.seccion-ideales .pilar-card {
+    background: rgba(5, 20, 44, 0.88) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+}
+
+.seccion-ideales .pilar-num {
+    color: #ffd166 !important;
+}
+
+/* =================================================================
+   SECCIÓN QUIÉNES SOMOS COMPLETA: FONDO BLANCO DE INICIO A FIN
+   ================================================================= */
 .seccion-quienes-somos,
 .seccion-quienes-somos .seccion-marco,
 .seccion-quienes-somos .content-box.quienes-somos-box,
@@ -521,6 +548,49 @@ section.seccion-quienes-somos:nth-of-type(n) .content-box {
     color: #111111 !important;
     border-top: 2px solid rgba(0, 0, 0, 0.12) !important;
     border-bottom: 2px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+/* =================================================================
+   SECCIÓN BLOG: FONDO ROJO BANDERA DOMINICANA (#CE1126)
+   ================================================================= */
+.seccion-blog,
+.seccion-blog .seccion-marco,
+.seccion-blog .content-box,
+section.seccion-blog:nth-of-type(n) .content-box {
+    background: var(--flag-red) !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #ffffff !important;
+    border-top: 2px solid rgba(255, 255, 255, 0.22) !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.22) !important;
+}
+
+.seccion-blog .section-header p {
+    color: #fff5f6 !important;
+}
+
+.seccion-blog .estado-sesion-banner,
+.seccion-blog .noticia-card,
+.seccion-blog .admin-panel-box {
+    background: rgba(68, 7, 14, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.24) !important;
+}
+
+.seccion-blog .noticia-meta {
+    color: #ffd166 !important;
+}
+
+.seccion-blog .noticia-texto {
+    color: #ffffff !important;
+}
+
+.seccion-blog .comentario-item {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.seccion-blog .comentario-item strong {
+    color: #ffd166 !important;
 }
 
 .quienes-somos-box {
@@ -1683,6 +1753,19 @@ section.seccion-quienes-somos:nth-of-type(n) .content-box {
         background: rgba(28, 16, 22, 0.82);
     }
 
+    .seccion-ideales,
+    .seccion-ideales .seccion-marco,
+    .seccion-ideales .content-box.ideales-box,
+    section.seccion-ideales:nth-of-type(n) .content-box {
+        background: var(--flag-blue) !important;
+        background-image: none !important;
+        color: #ffffff !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        padding: 18px 10px !important;
+    }
+
     .seccion-quienes-somos,
     .seccion-quienes-somos .seccion-marco,
     .seccion-quienes-somos .content-box.quienes-somos-box,
@@ -1690,6 +1773,19 @@ section.seccion-quienes-somos:nth-of-type(n) .content-box {
         background: #ffffff !important;
         background-image: none !important;
         color: #111111 !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        padding: 18px 10px !important;
+    }
+
+    .seccion-blog,
+    .seccion-blog .seccion-marco,
+    .seccion-blog .content-box,
+    section.seccion-blog:nth-of-type(n) .content-box {
+        background: var(--flag-red) !important;
+        background-image: none !important;
+        color: #ffffff !important;
         border-radius: 0 !important;
         border-left: none !important;
         border-right: none !important;
