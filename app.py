@@ -1,12 +1,13 @@
-import http.server
-import socketserver
-import threading
-import webbrowser
-import os
 import base64
-import unicodedata
+import functools
+import http.server
 import json
+import os
+import socketserver
 import sys
+import threading
+import unicodedata
+import webbrowser
 
 # =====================================================================
 # 🛠️ DETECCIÓN INTELIGENTE DE LOGO, PATRÓN Y COLLAGE TURÍSTICO
@@ -19,44 +20,44 @@ EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
 
 def normalizar_texto(texto):
-    nfkd = unicodedata.normalize("NFKD", texto.lower())
-    return "".join(c for c in nfkd if not unicodedata.combining(c))
+  nfkd = unicodedata.normalize("NFKD", texto.lower())
+  return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
 def cargar_imagen_base64(ruta_archivo):
-    nombre_lower = ruta_archivo.lower()
-    with open(ruta_archivo, "rb") as img_file:
-        encoded = base64.b64encode(img_file.read()).decode("utf-8")
-        if nombre_lower.endswith(".png"):
-            mime = "image/png"
-        elif nombre_lower.endswith(".webp"):
-            mime = "image/webp"
-        elif nombre_lower.endswith(".gif"):
-            mime = "image/gif"
-        else:
-            mime = "image/jpeg"
-        return f"data:{mime};base64,{encoded}"
+  nombre_lower = ruta_archivo.lower()
+  with open(ruta_archivo, "rb") as img_file:
+    encoded = base64.b64encode(img_file.read()).decode("utf-8")
+    if nombre_lower.endswith(".png"):
+      mime = "image/png"
+    elif nombre_lower.endswith(".webp"):
+      mime = "image/webp"
+    elif nombre_lower.endswith(".gif"):
+      mime = "image/gif"
+    else:
+      mime = "image/jpeg"
+    return f"data:{mime};base64,{encoded}"
 
 
 def obtener_rutas_busqueda():
-    rutas = ["."]
-    escritorios = [
-        os.path.expanduser("~/Desktop"),
-        os.path.expanduser("~/OneDrive/Desktop"),
-        os.path.expanduser("~/OneDrive/Escritorio"),
-        os.path.expanduser("~/Escritorio"),
-    ]
-    for esc in escritorios:
-        if os.path.isdir(esc):
-            rutas.append(esc)
-            carpeta_rd = os.path.join(esc, "pagina rd")
-            if os.path.isdir(carpeta_rd):
-                rutas.append(carpeta_rd)
-            for item in os.listdir(esc):
-                sub = os.path.join(esc, item)
-                if os.path.isdir(sub):
-                    rutas.append(sub)
-    return list(dict.fromkeys(os.path.abspath(r) for r in rutas))
+  rutas = ["."]
+  escritorios = [
+      os.path.expanduser("~/Desktop"),
+      os.path.expanduser("~/OneDrive/Desktop"),
+      os.path.expanduser("~/OneDrive/Escritorio"),
+      os.path.expanduser("~/Escritorio"),
+  ]
+  for esc in escritorios:
+    if os.path.isdir(esc):
+      rutas.append(esc)
+      carpeta_rd = os.path.join(esc, "pagina rd")
+      if os.path.isdir(carpeta_rd):
+        rutas.append(carpeta_rd)
+      for item in os.listdir(esc):
+        sub = os.path.join(esc, item)
+        if os.path.isdir(sub):
+          rutas.append(sub)
+  return list(dict.fromkeys(os.path.abspath(r) for r in rutas))
 
 
 candidatos_logo = []
@@ -64,57 +65,64 @@ candidatos_patron = []
 candidatos_collage = []
 
 for carpeta in obtener_rutas_busqueda():
-    try:
-        archivos = os.listdir(carpeta)
-    except OSError:
-        continue
+  try:
+    archivos = os.listdir(carpeta)
+  except OSError:
+    continue
 
-    for archivo in archivos:
-        ruta_completa = os.path.join(carpeta, archivo)
-        if not os.path.isfile(ruta_completa):
-            continue
+  for archivo in archivos:
+    ruta_completa = os.path.join(carpeta, archivo)
+    if not os.path.isfile(ruta_completa):
+      continue
 
-        nombre_norm = normalizar_texto(archivo)
-        tiene_extension = nombre_norm.endswith(EXTENSIONES_IMAGEN)
+    nombre_norm = normalizar_texto(archivo)
+    tiene_extension = nombre_norm.endswith(EXTENSIONES_IMAGEN)
 
-        if "corazon dominicano tropical" in nombre_norm or nombre_norm.startswith("logo_corazon"):
-            if tiene_extension or "." not in nombre_norm:
-                prioridad = 0 if "corazon dominicano tropical" in nombre_norm else 1
-                candidatos_logo.append((prioridad, ruta_completa))
+    if "corazon dominicano tropical" in nombre_norm or nombre_norm.startswith(
+        "logo_corazon"
+    ):
+      if tiene_extension or "." not in nombre_norm:
+        prioridad = 0 if "corazon dominicano tropical" in nombre_norm else 1
+        candidatos_logo.append((prioridad, ruta_completa))
 
-        elif (
-            "fondo_rd_muchas_repetible" in nombre_norm
+    elif (
+        "fondo_rd_muchas_repetible" in nombre_norm
+        or "repetible" in nombre_norm
+        or "fondo_rd" in nombre_norm
+        or "patron" in nombre_norm
+        or "banderas" in nombre_norm
+    ):
+      if tiene_extension or "." not in nombre_norm:
+        prioridad = (
+            0
+            if "fondo_rd_muchas_repetible" in nombre_norm
             or "repetible" in nombre_norm
-            or "fondo_rd" in nombre_norm
-            or "patron" in nombre_norm
-            or "banderas" in nombre_norm
-        ):
-            if tiene_extension or "." not in nombre_norm:
-                prioridad = 0 if "fondo_rd_muchas_repetible" in nombre_norm or "repetible" in nombre_norm else 1
-                candidatos_patron.append((prioridad, ruta_completa))
+            else 1
+        )
+        candidatos_patron.append((prioridad, ruta_completa))
 
-        elif (
-            "playa_rd" in nombre_norm
-            or "playas" in nombre_norm
-            or "playa" in nombre_norm
-            or "collage" in nombre_norm
-            or "turistico" in nombre_norm
-            or "republica" in nombre_norm
-        ):
-            prioridad = 0 if "playa_rd" in nombre_norm else 1
-            candidatos_collage.append((prioridad, ruta_completa))
+    elif (
+        "playa_rd" in nombre_norm
+        or "playas" in nombre_norm
+        or "playa" in nombre_norm
+        or "collage" in nombre_norm
+        or "turistico" in nombre_norm
+        or "republica" in nombre_norm
+    ):
+      prioridad = 0 if "playa_rd" in nombre_norm else 1
+      candidatos_collage.append((prioridad, ruta_completa))
 
 if candidatos_logo:
-    candidatos_logo.sort(key=lambda x: x[0])
-    logo_src = cargar_imagen_base64(candidatos_logo[0][1])
+  candidatos_logo.sort(key=lambda x: x[0])
+  logo_src = cargar_imagen_base64(candidatos_logo[0][1])
 
 if candidatos_patron:
-    candidatos_patron.sort(key=lambda x: x[0])
-    patron_src = cargar_imagen_base64(candidatos_patron[0][1])
+  candidatos_patron.sort(key=lambda x: x[0])
+  patron_src = cargar_imagen_base64(candidatos_patron[0][1])
 
 if candidatos_collage:
-    candidatos_collage.sort(key=lambda x: x[0])
-    collage_src = cargar_imagen_base64(candidatos_collage[0][1])
+  candidatos_collage.sort(key=lambda x: x[0])
+  collage_src = cargar_imagen_base64(candidatos_collage[0][1])
 
 
 # =====================================================================
@@ -123,143 +131,199 @@ if candidatos_collage:
 CONFIG_PAGINA = {
     "nombre_empresa": "CORAZÓN RD",
     "slogan_principal": "CORAZÓN RD",
-    "descripcion_hero": "Un espacio de coordinación ciudadana donde el pueblo hace valer su fuerza con hechos.",
-
+    "descripcion_hero": (
+        "Un espacio de coordinación ciudadana donde el pueblo hace valer su"
+        " fuerza con hechos."
+    ),
     "admin_defecto": {
         "usuario": "fafi_admin",
         "password": os.environ.get("FAFI_ADMIN_PASSWORD", "1234rd"),
         "comunidad": "Administración Central CORAZÓN RD",
         "email": "admin@corazonrd.org",
-        "rol": "admin"
+        "rol": "admin",
     },
-
     "ideales_bloque": {
         "badge": "EL PUEBLO TIENE EL PODER",
-        "titulo": "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ NO EN LAS PROMESAS DEL GOBIERNO",
+        "titulo": (
+            "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ NO EN LAS PROMESAS"
+            " DEL GOBIERNO"
+        ),
         "pilares": [
             {
                 "numero": "01",
                 "titulo": "SIN DEPENDER DE NADIE",
-                "texto": "El poder real no está en un cargo público; nace cuando la gente deja de esperar salvadores y se organiza."
+                "texto": (
+                    "El poder real no está en un cargo público; nace cuando la"
+                    " gente deja de esperar salvadores y se organiza."
+                ),
             },
             {
                 "numero": "02",
                 "titulo": "GRUPO COORDINADO",
-                "texto": "Un grupo lo suficientemente grande, unido y con rumbo claro tiene peso real para exigir y mover soluciones."
+                "texto": (
+                    "Un grupo lo suficientemente grande, unido y con rumbo claro"
+                    " tiene peso real para exigir y mover soluciones."
+                ),
             },
             {
                 "numero": "03",
                 "titulo": "CERO PROMESAS FALSAS",
-                "texto": "No creemos en discursos vacíos: coordinamos acción ciudadana para que los compromisos se cumplan de verdad."
-            }
-        ]
+                "texto": (
+                    "No creemos en discursos vacíos: coordinamos acción ciudadana"
+                    " para que los compromisos se cumplan de verdad."
+                ),
+            },
+        ],
     },
-
     "quienes_somos_bloque": {
         "badge": "PATRIOTAS POR EL FUTURO",
         "titulo": "QUIÉNES SOMOS",
-        "cita": "“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”",
-        "descripcion": "Somos un grupo de patriotas que busca que el país tenga un mejor futuro para todos los dominicanos de hoy y el futuro que viene. Todas las comunidades unidas —desde las juntas de vecinos hasta el que vende coco y limpia botas— tienen el poder para protestar por lo más mínimo sin que el gobierno haga lo que le plazca.",
+        "cita": (
+            "“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE"
+            " CREEN QUE TIENEN”"
+        ),
+        "descripcion": (
+            "Somos un grupo de patriotas que busca que el país tenga un mejor"
+            " futuro para todos los dominicanos de hoy y el futuro que viene."
+            " Todas las comunidades unidas —desde las juntas de vecinos hasta el"
+            " que vende coco y limpia botas— tienen el poder para protestar por"
+            " lo más mínimo sin que el gobierno haga lo que le plazca."
+        ),
         "pilares_comunidad": [
             {
                 "etiqueta": "BARRIO Y COMUNIDAD",
                 "titulo": "JUNTAS DE VECINOS UNIDAS",
-                "texto": "Cada calle, sector y comunidad organizada es el primer frente para defender lo justo."
+                "texto": (
+                    "Cada calle, sector y comunidad organizada es el primer"
+                    " frente para defender lo justo."
+                ),
             },
             {
                 "etiqueta": "TRABAJO DIGNO DE CALLE",
                 "titulo": "DEL QUE VENDE COCO AL LIMPIABOTAS",
-                "texto": "La gente trabajadora de todos los días tiene voz, peso y derecho a exigir respeto."
+                "texto": (
+                    "La gente trabajadora de todos los días tiene voz, peso y"
+                    " derecho a exigir respeto."
+                ),
             },
             {
                 "etiqueta": "FIRMEZA CIUDADANA",
                 "titulo": "PROTESTA POR LO MÍNIMO",
-                "texto": "No normalizamos abusos ni caprichos: alzamos la voz unidos para que no se haga lo que plazca."
-            }
-        ]
+                "texto": (
+                    "No normalizamos abusos ni caprichos: alzamos la voz unidos"
+                    " para que no se haga lo que plazca."
+                ),
+            },
+        ],
     },
-
     "blog_config": {
         "titulo_menu": "Blog",
         "titulo_seccion": "BLOG Y EVENTOS",
-        "descripcion": "Publicaciones comunitarias administradas por el equipo. Todos los usuarios pueden reaccionar a las publicaciones; para comentar o enviar mensajes a los administradores, inicia sesión o crea tu usuario.",
+        "descripcion": (
+            "Publicaciones comunitarias administradas por el equipo. Todos los"
+            " usuarios pueden reaccionar a las publicaciones; para comentar o"
+            " enviar mensajes a los administradores, inicia sesión o crea tu"
+            " usuario."
+        ),
         "noticias_iniciales": [
             {
                 "id": "noticia-1",
-                "titulo": "Juntas de vecinos se coordinan para exigir respuesta en sus sectores",
+                "titulo": (
+                    "Juntas de vecinos se coordinan para exigir respuesta en sus"
+                    " sectores"
+                ),
                 "categoria": "Comunidad",
                 "autor": "fafi_admin",
                 "fecha": "Hoy",
                 "imagen": "https://picsum.photos/id/1018/600/350",
-                "contenido": "Vecinos y trabajadores de distintos puntos coinciden en que organizarse por barrio y mantener comunicación constante permite defender lo más básico sin esperar promesas vacías.",
-                "comentarios": [
-                    {
-                        "autor": "Juan Pérez",
-                        "texto": "Cuando los barrios se ponen de acuerdo de verdad, la voz pesa más."
-                    }
-                ]
+                "contenido": (
+                    "Vecinos y trabajadores de distintos puntos coinciden en que"
+                    " organizarse por barrio y mantener comunicación constante"
+                    " permite defender lo más básico sin esperar promesas"
+                    " vacías."
+                ),
+                "comentarios": [{
+                    "autor": "Juan Pérez",
+                    "texto": (
+                        "Cuando los barrios se ponen de acuerdo de verdad, la voz"
+                        " pesa más."
+                    ),
+                }],
             },
             {
                 "id": "noticia-2",
-                "titulo": "El valor del trabajo diario y la participación de toda la gente",
+                "titulo": (
+                    "El valor del trabajo diario y la participación de toda la"
+                    " gente"
+                ),
                 "categoria": "Voz del Pueblo",
                 "autor": "fafi_admin",
                 "fecha": "Ayer",
                 "imagen": "https://picsum.photos/id/1015/600/350",
-                "contenido": "Desde el que vende coco y el que limpia botas hasta comerciantes y familias: cada persona que trabaja y aporta tiene derecho a alzar la voz y exigir respeto.",
-                "comentarios": []
-            }
-        ]
+                "contenido": (
+                    "Desde el que vende coco y el que limpia botas hasta"
+                    " comerciantes y familias: cada persona que trabaja y"
+                    " aporta tiene derecho a alzar la voz y exigir respeto."
+                ),
+                "comentarios": [],
+            },
+        ],
     },
-
     "mensajes_admin_config": {
         "titulo_menu": "Mensajes Admin",
         "titulo_seccion": "MENSAJES A LOS ADMINISTRADORES",
-        "descripcion": "Si tienes cuenta registrada y hay algún evento importante, asamblea comunitaria, protesta o situación urgente en tu sector, envíale el detalle a los administradores."
+        "descripcion": (
+            "Si tienes cuenta registrada y hay algún evento importante,"
+            " asamblea comunitaria, protesta o situación urgente en tu sector,"
+            " envíale el detalle a los administradores."
+        ),
     },
-
     "donaciones": {
         "titulo_menu": "Donaciones",
         "titulo_seccion": "DONACIONES",
-        "descripcion": "Con un peso dominicano puedes apoyar a que mañana seamos un mejor país, este dinero es usado únicamente con el fin de ayudar a los eventos y protestas futuras en cualquier parte del país.",
+        "descripcion": (
+            "Con un peso dominicano puedes apoyar a que mañana seamos un mejor"
+            " país, este dinero es usado únicamente con el fin de ayudar a los"
+            " eventos y protestas futuras en cualquier parte del país."
+        ),
         "texto_boton": "QUIERO DONAR",
         "cuentas": [
             {
                 "nombre": "PayPal",
                 "etiqueta": "Cuenta / Enlace PayPal",
-                "dato": "paypal.me/corazonrd"
+                "dato": "paypal.me/corazonrd",
             },
             {
                 "nombre": "Banreservas",
                 "etiqueta": "Cuenta de Ahorros Banreservas",
-                "dato": "960-000000-1 (Corazón RD)"
+                "dato": "960-000000-1 (Corazón RD)",
             },
             {
                 "nombre": "Popular",
                 "etiqueta": "Cuenta Banco Popular",
-                "dato": "800-000000-2 (Corazón RD)"
+                "dato": "800-000000-2 (Corazón RD)",
             },
             {
                 "nombre": "BHD",
                 "etiqueta": "Cuenta Banco BHD",
-                "dato": "700-000000-3 (Corazón RD)"
-            }
+                "dato": "700-000000-3 (Corazón RD)",
+            },
         ],
-        "mensaje_motivador": "Un peso suma cuando el pueblo camina junto: hoy es una semilla de dignidad, mañana es la fuerza que despierta a un país entero."
+        "mensaje_motivador": (
+            "Un peso suma cuando el pueblo camina junto: hoy es una semilla de"
+            " dignidad, mañana es la fuerza que despierta a un país entero."
+        ),
     },
-
     "logo_url": logo_src,
     "patron_url": patron_src,
     "collage_url": collage_src if collage_src else "playa_rd.png",
-
     "redes_sociales": {
         "facebook": "https://facebook.com",
         "instagram": "https://instagram.com",
         "linkedin": "https://linkedin.com",
         "youtube": "https://youtube.com",
-        "tiktok": "https://tiktok.com"
+        "tiktok": "https://tiktok.com",
     },
-
     "secciones": [
         {
             "id": "ideales",
@@ -267,18 +331,33 @@ CONFIG_PAGINA = {
             "titulo_seccion": "IDEALES",
             "subtitulo": "LO QUE DEFENDEMOS EN PALABRAS CLARAS",
             "descripcion": "",
-            "proyectos": []
+            "proyectos": [],
         },
         {
             "id": "protesta",
             "titulo_menu": "Protesta",
             "titulo_seccion": "PROTESTA",
             "subtitulo": "ACCIÓN CIUDADANA ORGANIZADA",
-            "descripcion": "Expresión visual, denuncia y movilización coordinada para que las demandas del pueblo no se ignoren y cada compromiso se haga cumplir con hechos. Todos los usuarios pueden reaccionar a cada publicación.",
+            "descripcion": (
+                "Expresión visual, denuncia y movilización coordinada para que"
+                " las demandas del pueblo no se ignoren y cada compromiso se"
+                " haga cumplir con hechos. Todos los usuarios pueden reaccionar a"
+                " cada publicación."
+            ),
             "proyectos": [
-                {"id": "protesta-1", "titulo": "Voz Coordinada", "categoria": "Acción Ciudadana", "imagen": "https://picsum.photos/id/1025/600/400"},
-                {"id": "protesta-2", "titulo": "Que Se Cumpla", "categoria": "Fiscalización", "imagen": "https://picsum.photos/id/1024/600/400"}
-            ]
+                {
+                    "id": "protesta-1",
+                    "titulo": "Voz Coordinada",
+                    "categoria": "Acción Ciudadana",
+                    "imagen": "https://picsum.photos/id/1025/600/400",
+                },
+                {
+                    "id": "protesta-2",
+                    "titulo": "Que Se Cumpla",
+                    "categoria": "Fiscalización",
+                    "imagen": "https://picsum.photos/id/1024/600/400",
+                },
+            ],
         },
         {
             "id": "quienes-somos",
@@ -286,9 +365,9 @@ CONFIG_PAGINA = {
             "titulo_seccion": "QUIÉNES SOMOS",
             "subtitulo": "PATRIOTAS POR UN MEJOR FUTURO",
             "descripcion": "",
-            "proyectos": []
-        }
-    ]
+            "proyectos": [],
+        },
+    ],
 }
 
 MENU_6_BOTONES = [
@@ -296,25 +375,31 @@ MENU_6_BOTONES = [
     {"id": "protesta", "titulo_menu": "Protesta"},
     {"id": "quienes-somos", "titulo_menu": "Quiénes Somos"},
     {"id": "blog", "titulo_menu": CONFIG_PAGINA["blog_config"]["titulo_menu"]},
-    {"id": "mensajes-admin", "titulo_menu": CONFIG_PAGINA["mensajes_admin_config"]["titulo_menu"]},
-    {"id": "donaciones", "titulo_menu": CONFIG_PAGINA["donaciones"]["titulo_menu"]},
+    {
+        "id": "mensajes-admin",
+        "titulo_menu": CONFIG_PAGINA["mensajes_admin_config"]["titulo_menu"],
+    },
+    {
+        "id": "donaciones",
+        "titulo_menu": CONFIG_PAGINA["donaciones"]["titulo_menu"],
+    },
 ]
 
 
 def render_seccion_boton(boton_id):
-    if boton_id == "ideales":
-        ib = CONFIG_PAGINA["ideales_bloque"]
-        pilares_html = "".join([
-            f"""
+  if boton_id == "ideales":
+    ib = CONFIG_PAGINA["ideales_bloque"]
+    pilares_html = "".join([
+        f"""
             <div class="pilar-card">
                 <span class="pilar-num">{item['numero']}</span>
                 <h3>{item['titulo']}</h3>
                 <p>{item['texto']}</p>
             </div>
             """
-            for item in ib["pilares"]
-        ])
-        return f"""
+        for item in ib["pilares"]
+    ])
+    return f"""
         <section id="ideales" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box ideales-box">
@@ -329,10 +414,14 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    if boton_id == "protesta":
-        sec = next((s for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"), {})
-        desc_html = f"<p>{sec['descripcion']}</p>" if sec.get("descripcion") else ""
-        return f"""
+  if boton_id == "protesta":
+    sec = next(
+        (s for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"), {}
+    )
+    desc_html = (
+        f"<p>{sec['descripcion']}</p>" if sec.get("descripcion") else ""
+    )
+    return f"""
         <section id="protesta" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box">
@@ -346,19 +435,19 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    if boton_id == "quienes-somos":
-        qs = CONFIG_PAGINA["quienes_somos_bloque"]
-        comunidad_html = "".join([
-            f"""
+  if boton_id == "quienes-somos":
+    qs = CONFIG_PAGINA["quienes_somos_bloque"]
+    comunidad_html = "".join([
+        f"""
             <div class="comunidad-card">
                 <span>{item['etiqueta']}</span>
                 <h3>{item['titulo']}</h3>
                 <p>{item['texto']}</p>
             </div>
             """
-            for item in qs["pilares_comunidad"]
-        ])
-        return f"""
+        for item in qs["pilares_comunidad"]
+    ])
+    return f"""
         <section id="quienes-somos" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box quienes-somos-box">
@@ -379,9 +468,9 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    if boton_id == "blog":
-        blog = CONFIG_PAGINA["blog_config"]
-        return f"""
+  if boton_id == "blog":
+    blog = CONFIG_PAGINA["blog_config"]
+    return f"""
         <section id="blog" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box">
@@ -439,9 +528,9 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    if boton_id == "mensajes-admin":
-        ma = CONFIG_PAGINA["mensajes_admin_config"]
-        return f"""
+  if boton_id == "mensajes-admin":
+    ma = CONFIG_PAGINA["mensajes_admin_config"]
+    return f"""
         <section id="mensajes-admin" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box">
@@ -507,10 +596,10 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    if boton_id == "donaciones":
-        don = CONFIG_PAGINA["donaciones"]
-        cuentas_html = "".join([
-            f"""
+  if boton_id == "donaciones":
+    don = CONFIG_PAGINA["donaciones"]
+    cuentas_html = "".join([
+        f"""
             <div class="cuenta-tarjeta">
                 <span class="cuenta-banco">{c['nombre']}</span>
                 <p class="cuenta-etiqueta">{c['etiqueta']}</p>
@@ -518,9 +607,9 @@ def render_seccion_boton(boton_id):
                 <button type="button" class="btn btn-pequeno btn-copiar-cuenta" data-copiar="{c['nombre']}: {c['dato']}">Copiar</button>
             </div>
             """
-            for c in don["cuentas"]
-        ])
-        return f"""
+        for c in don["cuentas"]
+    ])
+    return f"""
         <section id="donaciones" class="section">
             <div style="padding: 0 50px;">
                 <div class="content-box">
@@ -547,7 +636,7 @@ def render_seccion_boton(boton_id):
         </section>
         """
 
-    return ""
+  return ""
 
 
 MENU_6_BOTONES_HTML = "".join([
@@ -555,23 +644,25 @@ MENU_6_BOTONES_HTML = "".join([
     for b in MENU_6_BOTONES
 ])
 
-SECCIONES_6_BOTONES_HTML = "".join([
-    render_seccion_boton(b["id"])
-    for b in MENU_6_BOTONES
-])
+SECCIONES_6_BOTONES_HTML = "".join(
+    [render_seccion_boton(b["id"]) for b in MENU_6_BOTONES]
+)
 
 PROTESTAS_INICIALES = next(
     (s["proyectos"] for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"),
-    []
+    [],
 )
 
-DATOS_JS = json.dumps({
-    "adminDefecto": CONFIG_PAGINA["admin_defecto"],
-    "noticiasDefecto": CONFIG_PAGINA["blog_config"]["noticias_iniciales"],
-    "protestasDefecto": PROTESTAS_INICIALES,
-    "menu6Ids": [b["id"] for b in MENU_6_BOTONES],
-    "patronUrl": CONFIG_PAGINA["patron_url"],
-}, ensure_ascii=False)
+DATOS_JS = json.dumps(
+    {
+        "adminDefecto": CONFIG_PAGINA["admin_defecto"],
+        "noticiasDefecto": CONFIG_PAGINA["blog_config"]["noticias_iniciales"],
+        "protestasDefecto": PROTESTAS_INICIALES,
+        "menu6Ids": [b["id"] for b in MENU_6_BOTONES],
+        "patronUrl": CONFIG_PAGINA["patron_url"],
+    },
+    ensure_ascii=False,
+)
 
 HTML_TEMPLATE = f"""<!DOCTYPE html>
 <html lang="es">
@@ -705,13 +796,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
                 <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             </a>
             <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" title="TikTok">
-                <svg viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
             </a>
         </div>
     </aside>
 
     <script>
-        window.CORAZON_RD_CONFIG = {DATOS_JS};
+        window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
     <script src="recursos/app_logica.js"></script>
 </body>
@@ -719,37 +810,45 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 """
 
 
-class ReutilizableTCPServer(socketserver.TCPServer):
-    allow_reuse_address = True
+class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, directory=".", **kwargs)
+
+  def do_GET(self):
+    ruta_limpia = self.path.split("?")[0]
+    if ruta_limpia in ("", "/", "/index.html"):
+      cuerpo = HTML_TEMPLATE.encode("utf-8")
+      self.send_response(200)
+      self.send_header("Content-Type", "text/html; charset=utf-8")
+      self.send_header("Content-Length", str(len(cuerpo)))
+      self.end_headers()
+      self.wfile.write(cuerpo)
+      return
+    return super().do_GET()
+
+  def log_message(self, format, *args):
+    sys.stderr.write(f"[CorazonRD] {self.address_string()} - {format % args}\n")
 
 
-def generar_index_html(ruta_base):
-    ruta_index = os.path.join(ruta_base, "index.html")
-    with open(ruta_index, "w", encoding="utf-8") as f:
-        f.write(HTML_TEMPLATE)
-    return ruta_index
+class ServidorReutilizable(socketserver.ThreadingMixIn, http.server.HTTPServer):
+  allow_reuse_address = True
+  daemon_threads = True
 
 
-def iniciar_servidor(puerto=8000):
-    directorio_script = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(directorio_script)
-    generar_index_html(directorio_script)
-
-    handler = http.server.SimpleHTTPRequestHandler
-    with ReutilizableTCPServer(("127.0.0.1", puerto), handler) as httpd:
-        url = f"http://localhost:{puerto}"
-        print(f"=== PÁGINA {CONFIG_PAGINA['nombre_empresa']} EN FUNCIONAMIENTO ===")
-        print(f"Admin por defecto -> usuario: {CONFIG_PAGINA['admin_defecto']['usuario']} | contraseña: {CONFIG_PAGINA['admin_defecto']['password']}")
-        print("Presiona Ctrl+C en esta terminal para salir.")
-        print(f"[+] Servidor listo en {url}")
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nServidor detenido.")
-            sys.exit(0)
+def abrir_navegador_local(url):
+  if not os.environ.get("RENDER"):
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
 
 if __name__ == "__main__":
-    puerto_env = int(os.environ.get("PORT", "8000"))
-    iniciar_servidor(puerto_env)
+  puerto = int(os.environ.get("PORT", 8000))
+  host = "0.0.0.0"
+  servidor = ServidorReutilizable((host, puerto), ManejadorCorazonRD)
+  print(f"Servidor CORAZÓN RD escuchando en http://{host}:{puerto}", flush=True)
+  abrir_navegador_local(f"http://127.0.0.1:{puerto}")
+  try:
+    servidor.serve_forever()
+  except KeyboardInterrupt:
+    print("\nServidor detenido.", flush=True)
+  finally:
+    servidor.server_close()
