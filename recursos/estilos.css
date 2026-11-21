@@ -112,6 +112,10 @@ body {
     z-index: 1;
 }
 
+.collage-container {
+    pointer-events: none;
+}
+
 aside.sidebar-border {
     position: fixed;
     right: 0;
@@ -148,6 +152,7 @@ aside.sidebar {
     align-items: center;
     padding: 26px 20px 26px 42px;
     z-index: 10000;
+    pointer-events: auto;
     clip-path: polygon(15% 0, 100% 0, 100% 100%, 0% 100%);
     box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
     overflow-y: auto;
@@ -165,6 +170,7 @@ aside.sidebar {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    pointer-events: auto;
     text-decoration: none;
     border-radius: 14px;
     padding: 4px;
@@ -215,6 +221,8 @@ aside.sidebar {
     letter-spacing: 1.8px;
     padding: 4px 2px;
     display: inline-block;
+    cursor: pointer;
+    pointer-events: auto;
     background: transparent;
     border: none;
     border-radius: 0;
@@ -265,6 +273,8 @@ aside.sidebar {
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    pointer-events: auto;
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.85));
     transition: transform 0.2s ease, color 0.3s ease;
     text-decoration: none;
