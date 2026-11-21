@@ -33,45 +33,99 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // -----------------------------------------------------------------
-    // CONTROLADOR UNIFICADO DE LOS 6 BOTONES DEL MENÚ (COMO 1 SOLO)
+    // CONTROLADOR UNIFICADO DE LOS 6 BOTONES DEL MENÚ (PC + TELÉFONO)
     // -----------------------------------------------------------------
-    const menu6Contenedor = document.getElementById("menu-principal-6");
-    const navLinks = menu6Contenedor ? Array.from(menu6Contenedor.querySelectorAll("a[data-menu-id]")) : [];
-    const seccionesMenu6 = MENU_6_IDS.map(id => document.getElementById(id)).filter(Boolean);
+    const sidebarEl = document.querySelector("aside.sidebar");
+    const menu6Contenedor =
+        document.getElementById("menu-principal-6") ||
+        (sidebarEl ? sidebarEl.querySelector(".sidebar-nav") : null);
+
+    const navLinks = menu6Contenedor
+        ? Array.from(menu6Contenedor.querySelectorAll("a[data-menu-id], a[href^='#'], button[data-menu-id]"))
+        : (sidebarEl ? Array.from(sidebarEl.querySelectorAll(".sidebar-nav a, .sidebar-nav button")) : []);
+
+    function obtenerIdEnlace(el) {
+        if (!el) return "";
+        const dataId = el.getAttribute("data-menu-id");
+        if (dataId && dataId.trim()) return dataId.trim();
+        const href = el.getAttribute("href") || "";
+        return href.startsWith("#") ? href.slice(1).trim() : "";
+    }
+
+    const idsEfectivosMenu6 = MENU_6_IDS.length > 0
+        ? MENU_6_IDS
+        : navLinks.map(obtenerIdEnlace).filter(Boolean);
+
+    const seccionesMenu6 = idsEfectivosMenu6
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+
+    let scrollProgramadoActivo = false;
+    let temporizadorScroll = null;
+
+    function obtenerCompensacionSuperior() {
+        if (window.innerWidth > 900 || !sidebarEl) return 16;
+        return (sidebarEl.offsetHeight || 80) + 12;
+    }
 
     function activarBotonMenuUnificado(seccionId, desplazar) {
-        if (!seccionId || !MENU_6_IDS.includes(seccionId)) return;
+        if (!seccionId) return;
+
         navLinks.forEach(link => {
-            link.classList.toggle("active", link.getAttribute("data-menu-id") === seccionId);
+            link.classList.toggle("active", obtenerIdEnlace(link) === seccionId);
         });
+
         if (desplazar) {
             const target = document.getElementById(seccionId);
-            if (target) {
-                target.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
+            if (!target) return;
+
+            scrollProgramadoActivo = true;
+            if (temporizadorScroll) clearTimeout(temporizadorScroll);
+
+            const compensacion = obtenerCompensacionSuperior();
+            const destinoY = Math.max(0, target.getBoundingClientRect().top + window.pageYOffset - compensacion);
+
+            window.scrollTo({
+                top: destinoY,
+                behavior: "smooth"
+            });
+
+            try {
+                history.replaceState(null, "", `#${seccionId}`);
+            } catch {}
+
+            temporizadorScroll = setTimeout(() => {
+                scrollProgramadoActivo = false;
+            }, 800);
         }
     }
 
-    if (menu6Contenedor) {
-        menu6Contenedor.addEventListener("click", (e) => {
-            const link = e.target.closest("a[data-menu-id]");
-            if (!link) return;
+    navLinks.forEach(link => {
+        link.addEventListener("click", (e) => {
+            const seccionId = obtenerIdEnlace(link);
+            if (!seccionId) return;
             e.preventDefault();
-            activarBotonMenuUnificado(link.getAttribute("data-menu-id"), true);
+            e.stopPropagation();
+            activarBotonMenuUnificado(seccionId, true);
         });
-    }
+    });
 
     window.addEventListener("scroll", () => {
-        let current = "";
-        seccionesMenu6.forEach(section => {
-            if (window.pageYOffset >= (section.offsetTop - 200)) {
-                current = section.getAttribute("id");
+        if (scrollProgramadoActivo || seccionesMenu6.length === 0) return;
+
+        const umbral = obtenerCompensacionSuperior() + 140;
+        let seccionActual = "";
+
+        seccionesMenu6.forEach(sec => {
+            if (window.pageYOffset >= (sec.offsetTop - umbral)) {
+                seccionActual = sec.getAttribute("id");
             }
         });
-        if (current) {
-            activarBotonMenuUnificado(current, false);
+
+        if (seccionActual) {
+            activarBotonMenuUnificado(seccionActual, false);
         }
-    });
+    }, { passive: true });
 
     // -----------------------------------------------------------------
     // SESIÓN Y MODALES
@@ -103,8 +157,20 @@ document.addEventListener("DOMContentLoaded", () => {
         cerrarModales();
         window.scrollTo({ top: 0, behavior: "smooth" });
         if (window.location.hash !== "#inicio") {
-            window.location.hash = "#inicio";
+            try {
+                history.replaceState(null, "", "#inicio");
+            } catch {
+                window.location.hash = "#inicio";
+            }
         }
+    }
+
+    const btnInicioImg = document.querySelector(".sidebar-logo a.btn-inicio-img");
+    if (btnInicioImg) {
+        btnInicioImg.addEventListener("click", (e) => {
+            e.preventDefault();
+            irAPaginaPrincipal();
+        });
     }
 
     if (btnTopLogin) btnTopLogin.addEventListener("click", () => abrirModal(modalLogin));
@@ -791,7 +857,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const destino = panelAdminBlog || document.getElementById("blog");
         if (destino) {
-            destino.scrollIntoView({ behavior: "smooth", block: "start" });
+            const compensacion = obtenerCompensacionSuperior();
+            const destinoY = Math.max(0, destino.getBoundingClientRect().top + window.pageYOffset - compensacion);
+            window.scrollTo({ top: destinoY, behavior: "smooth" });
         }
         if (inputTitulo) inputTitulo.focus();
     }
@@ -1037,9 +1105,11 @@ document.addEventListener("DOMContentLoaded", () => {
     actualizarEstadoAccesoUI();
     renderizarTodo(null);
     renderizarMensajesAdmin();
-});
 
-    actualizarEstadoAccesoUI();
-    renderizarTodo(null);
-    renderizarMensajesAdmin();
+    const hashInicial = (window.location.hash || "").replace(/^#/, "");
+    if (hashInicial && idsEfectivosMenu6.includes(hashInicial)) {
+        activarBotonMenuUnificado(hashInicial, false);
+    } else if (idsEfectivosMenu6.length > 0) {
+        activarBotonMenuUnificado(idsEfectivosMenu6[0], false);
+    }
 });
