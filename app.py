@@ -1,5 +1,4 @@
 import base64
-import functools
 import http.server
 import json
 import os
@@ -13,8 +12,8 @@ import webbrowser
 # 🛠️ DETECCIÓN INTELIGENTE DE LOGO, PATRÓN Y COLLAGE TURÍSTICO
 # =====================================================================
 logo_src = "https://picsum.photos/id/10/140/60"
-patron_src = ""
-collage_src = ""
+patron_src = "fondo_RD_muchas_repetible.png"
+collage_src = "playa_rd.png"
 
 EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
@@ -179,15 +178,16 @@ CONFIG_PAGINA = {
         "badge": "PATRIOTAS POR EL FUTURO",
         "titulo": "QUIÉNES SOMOS",
         "cita": (
-            "“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE"
-            " CREEN QUE TIENEN”"
+            "“SI LOS DE ABAJO NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE"
+            " CREEN QUE TIENEN”."
         ),
         "descripcion": (
             "Somos un grupo de patriotas que busca que el país tenga un mejor"
-            " futuro para todos los dominicanos de hoy y el futuro que viene."
-            " Todas las comunidades unidas —desde las juntas de vecinos hasta el"
-            " que vende coco y limpia botas— tienen el poder para protestar por"
-            " lo más mínimo sin que el gobierno haga lo que le plazca."
+            " futuro para todos los dominicanos de hoy y para las generaciones"
+            " que vienen. Todas las comunidades unidas —desde las juntas de"
+            " vecinos hasta quien vende coco y limpia botas— tienen el poder"
+            " para protestar por lo más mínimo sin que el gobierno haga lo que le"
+            " plazca."
         ),
         "pilares_comunidad": [
             {
@@ -200,9 +200,9 @@ CONFIG_PAGINA = {
             },
             {
                 "etiqueta": "TRABAJO DIGNO DE CALLE",
-                "titulo": "DEL QUE VENDE COCO AL LIMPIABOTAS",
+                "titulo": "DESDE QUIEN VENDE COCO HASTA EL LIMPIABOTAS",
                 "texto": (
-                    "La gente trabajadora de todos los días tiene voz, peso y"
+                    "La gente trabajadora de cada día tiene voz, peso y"
                     " derecho a exigir respeto."
                 ),
             },
@@ -223,7 +223,7 @@ CONFIG_PAGINA = {
             "Publicaciones comunitarias administradas por el equipo. Todos los"
             " usuarios pueden reaccionar a las publicaciones; para comentar o"
             " enviar mensajes a los administradores, inicia sesión o crea tu"
-            " usuario."
+            " cuenta."
         ),
         "noticias_iniciales": [
             {
@@ -261,7 +261,7 @@ CONFIG_PAGINA = {
                 "fecha": "Ayer",
                 "imagen": "https://picsum.photos/id/1015/600/350",
                 "contenido": (
-                    "Desde el que vende coco y el que limpia botas hasta"
+                    "Desde quien vende coco y quien limpia botas hasta"
                     " comerciantes y familias: cada persona que trabaja y"
                     " aporta tiene derecho a alzar la voz y exigir respeto."
                 ),
@@ -275,7 +275,7 @@ CONFIG_PAGINA = {
         "descripcion": (
             "Si tienes cuenta registrada y hay algún evento importante,"
             " asamblea comunitaria, protesta o situación urgente en tu sector,"
-            " envíale el detalle a los administradores."
+            " envíale los detalles a los administradores."
         ),
     },
     "donaciones": {
@@ -283,19 +283,19 @@ CONFIG_PAGINA = {
         "titulo_seccion": "DONACIONES",
         "descripcion": (
             "Con un peso dominicano puedes apoyar a que mañana seamos un mejor"
-            " país, este dinero es usado únicamente con el fin de ayudar a los"
+            " país. Este dinero se usa únicamente con el fin de respaldar los"
             " eventos y protestas futuras en cualquier parte del país."
         ),
         "texto_boton": "QUIERO DONAR",
         "cuentas": [
             {
                 "nombre": "PayPal",
-                "etiqueta": "Cuenta / Enlace PayPal",
+                "etiqueta": "Cuenta o enlace de PayPal",
                 "dato": "paypal.me/corazonrd",
             },
             {
                 "nombre": "Banreservas",
-                "etiqueta": "Cuenta de Ahorros Banreservas",
+                "etiqueta": "Cuenta de ahorros Banreservas",
                 "dato": "960-000000-1 (Corazón RD)",
             },
             {
@@ -311,12 +311,12 @@ CONFIG_PAGINA = {
         ],
         "mensaje_motivador": (
             "Un peso suma cuando el pueblo camina junto: hoy es una semilla de"
-            " dignidad, mañana es la fuerza que despierta a un país entero."
+            " dignidad; mañana es la fuerza que despierta a un país entero."
         ),
     },
     "logo_url": logo_src,
     "patron_url": patron_src,
-    "collage_url": collage_src if collage_src else "playa_rd.png",
+    "collage_url": collage_src,
     "redes_sociales": {
         "facebook": "https://facebook.com",
         "instagram": "https://instagram.com",
@@ -341,8 +341,8 @@ CONFIG_PAGINA = {
             "descripcion": (
                 "Expresión visual, denuncia y movilización coordinada para que"
                 " las demandas del pueblo no se ignoren y cada compromiso se"
-                " haga cumplir con hechos. Todos los usuarios pueden reaccionar a"
-                " cada publicación."
+                " cumpla con hechos. Todos los usuarios pueden reaccionar a cada"
+                " publicación."
             ),
             "proyectos": [
                 {
@@ -400,8 +400,8 @@ def render_seccion_boton(boton_id):
         for item in ib["pilares"]
     ])
     return f"""
-        <section id="ideales" class="section">
-            <div style="padding: 0 50px;">
+        <section id="ideales" class="section seccion-bloque seccion-ideales">
+            <div class="seccion-marco">
                 <div class="content-box ideales-box">
                     <span class="hero-badge">{ib['badge']}</span>
                     <h2 class="ideales-main-title">{ib['titulo']}</h2>
@@ -422,8 +422,8 @@ def render_seccion_boton(boton_id):
         f"<p>{sec['descripcion']}</p>" if sec.get("descripcion") else ""
     )
     return f"""
-        <section id="protesta" class="section">
-            <div style="padding: 0 50px;">
+        <section id="protesta" class="section seccion-bloque seccion-protesta">
+            <div class="seccion-marco">
                 <div class="content-box">
                     <div class="section-header">
                         <h2>{sec.get('titulo_seccion', 'PROTESTA')}</h2>
@@ -448,8 +448,8 @@ def render_seccion_boton(boton_id):
         for item in qs["pilares_comunidad"]
     ])
     return f"""
-        <section id="quienes-somos" class="section">
-            <div style="padding: 0 50px;">
+        <section id="quienes-somos" class="section seccion-bloque seccion-quienes-somos">
+            <div class="seccion-marco">
                 <div class="content-box quienes-somos-box">
                     <span class="hero-badge">{qs['badge']}</span>
                     <h2>{qs['titulo']}</h2>
@@ -471,8 +471,8 @@ def render_seccion_boton(boton_id):
   if boton_id == "blog":
     blog = CONFIG_PAGINA["blog_config"]
     return f"""
-        <section id="blog" class="section">
-            <div style="padding: 0 50px;">
+        <section id="blog" class="section seccion-bloque seccion-blog">
+            <div class="seccion-marco">
                 <div class="content-box">
                     <div class="section-header">
                         <h2>{blog['titulo_seccion']}</h2>
@@ -480,10 +480,10 @@ def render_seccion_boton(boton_id):
                     </div>
 
                     <div id="estado-sesion-blog" class="estado-sesion-banner">
-                        <p id="texto-estado-sesion">Modo visitante: puedes ver y reaccionar a las publicaciones, pero debes iniciar sesión o crear tu usuario para comentar o enviar mensajes.</p>
+                        <p id="texto-estado-sesion">Modo visitante: puedes ver y reaccionar a las publicaciones, pero debes iniciar sesión o crear tu cuenta para comentar o enviar mensajes.</p>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <button type="button" id="btn-blog-login" class="btn btn-donar btn-pequeno">Iniciar Sesión</button>
-                            <button type="button" id="btn-blog-crear" class="btn btn-pequeno">Crear Usuario</button>
+                            <button type="button" id="btn-blog-login" class="btn btn-donar btn-pequeno">Iniciar sesión</button>
+                            <button type="button" id="btn-blog-crear" class="btn btn-pequeno">Crear cuenta</button>
                         </div>
                     </div>
 
@@ -502,7 +502,7 @@ def render_seccion_boton(boton_id):
                             </div>
 
                             <div class="campo-grupo">
-                                <label for="pub-imagen">Imagen (sube desde tu PC/teléfono o pega URL)</label>
+                                <label for="pub-imagen">Imagen (sube desde tu PC o teléfono, o pega un enlace)</label>
                                 <div class="subir-imagen-fila">
                                     <button type="button" id="btn-subir-imagen-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
                                     <button type="button" id="btn-quitar-pub-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
@@ -517,7 +517,7 @@ def render_seccion_boton(boton_id):
                                 <label for="pub-contenido">Contenido</label>
                                 <textarea id="pub-contenido" required placeholder="Escribe el mensaje o anuncio..."></textarea>
                             </div>
-                            <button type="submit" class="btn btn-donar btn-pequeno">Publicar Noticia</button>
+                            <button type="submit" class="btn btn-donar btn-pequeno">Publicar noticia</button>
                         </form>
                         <p id="msg-pub-admin" class="mensaje-feedback"></p>
                     </div>
@@ -531,8 +531,8 @@ def render_seccion_boton(boton_id):
   if boton_id == "mensajes-admin":
     ma = CONFIG_PAGINA["mensajes_admin_config"]
     return f"""
-        <section id="mensajes-admin" class="section">
-            <div style="padding: 0 50px;">
+        <section id="mensajes-admin" class="section seccion-bloque seccion-mensajes-admin">
+            <div class="seccion-marco">
                 <div class="content-box">
                     <div class="section-header">
                         <h2>{ma['titulo_seccion']}</h2>
@@ -545,15 +545,15 @@ def render_seccion_boton(boton_id):
                             <div class="acceso-fila-dos">
                                 <div class="campo-grupo">
                                     <label for="admin-remitente">Tu nombre o usuario</label>
-                                    <input type="text" id="admin-remitente" required placeholder="Ej. Juan / @voz_barrio">
+                                    <input type="text" id="admin-remitente" required placeholder="Ej. Juan o @voz_barrio">
                                 </div>
                                 <div class="campo-grupo">
                                     <label for="admin-tipo-evento">Tipo de evento o aviso</label>
                                     <select id="admin-tipo-evento">
-                                        <option value="Evento Importante">Evento Importante</option>
-                                        <option value="Asamblea Comunitaria">Asamblea Comunitaria</option>
-                                        <option value="Movilización / Protesta">Movilización / Protesta</option>
-                                        <option value="Reporte de Barrio">Reporte de Barrio</option>
+                                        <option value="Evento Importante">Evento importante</option>
+                                        <option value="Asamblea Comunitaria">Asamblea comunitaria</option>
+                                        <option value="Movilización / Protesta">Movilización o protesta</option>
+                                        <option value="Reporte de Barrio">Reporte de barrio</option>
                                     </select>
                                 </div>
                             </div>
@@ -570,22 +570,22 @@ def render_seccion_boton(boton_id):
                             </div>
 
                             <div class="campo-grupo">
-                                <label>Foto o evidencia (opcional — desde PC o teléfono)</label>
+                                <label>Foto o evidencia (opcional, desde PC o teléfono)</label>
                                 <div class="subir-imagen-fila">
                                     <button type="button" id="btn-subir-admin-img" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
                                     <button type="button" id="btn-quitar-admin-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
                                     <input type="file" id="input-archivo-admin-img" accept="image/*" style="display:none;">
                                     <span id="nombre-archivo-admin-img" style="font-size:0.84rem; color:#ffd166;"></span>
                                 </div>
-                                <img id="vista-previa-admin-img" class="vista-previa-img" alt="Vista previa adjunto para administradores">
+                                <img id="vista-previa-admin-img" class="vista-previa-img" alt="Vista previa adjunta para administradores">
                             </div>
 
                             <div class="campo-grupo">
-                                <label for="admin-detalle">Detalles del evento (fecha, hora, lugar y qué pasa)</label>
+                                <label for="admin-detalle">Detalles del evento (fecha, hora, lugar y situación)</label>
                                 <textarea id="admin-detalle" required placeholder="Explica los detalles para que los administradores revisen y publiquen el evento..."></textarea>
                             </div>
 
-                            <button type="submit" id="btn-enviar-admin" class="btn btn-donar">Enviar Mensaje a Administradores</button>
+                            <button type="submit" id="btn-enviar-admin" class="btn btn-donar">Enviar mensaje a administradores</button>
                         </form>
                         <p id="msg-admin-feedback" class="mensaje-feedback"></p>
                     </div>
@@ -610,8 +610,8 @@ def render_seccion_boton(boton_id):
         for c in don["cuentas"]
     ])
     return f"""
-        <section id="donaciones" class="section">
-            <div style="padding: 0 50px;">
+        <section id="donaciones" class="section seccion-bloque seccion-donaciones">
+            <div class="seccion-marco">
                 <div class="content-box">
                     <div class="section-header">
                         <h2>{don['titulo_seccion']}</h2>
@@ -671,25 +671,40 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
     <link rel="stylesheet" href="recursos/estilos.css">
+    <script>
+        (function() {{
+            const patron = {json.dumps(CONFIG_PAGINA['patron_url'] or 'fondo_RD_muchas_repetible.png', ensure_ascii=False)};
+            const aplicarPatron = () => {{
+                if (document.body && patron) {{
+                    document.body.style.setProperty("--patron-url", 'url("' + patron.replace(/"/g, '%22') + '")');
+                }}
+            }};
+            if (document.readyState === "loading") {{
+                document.addEventListener("DOMContentLoaded", aplicarPatron);
+            }} else {{
+                aplicarPatron();
+            }}
+        }})();
+    </script>
 </head>
 <body>
 
     <div class="top-left-auth" aria-label="Acceso de usuario">
         <span id="badge-usuario-activo" class="usuario-badge" style="display:none;"></span>
-        <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar Sesión</button>
-        <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear Usuario</button>
-        <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar Sesión</button>
+        <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar sesión</button>
+        <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear cuenta</button>
+        <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar sesión</button>
     </div>
 
     <div id="modal-login" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-login">
         <div class="modal-ventana">
             <button type="button" class="modal-cerrar" data-cerrar-modal="modal-login" aria-label="Cerrar ventana">×</button>
-            <h3 id="titulo-modal-login">Iniciar Sesión</h3>
+            <h3 id="titulo-modal-login">Iniciar sesión</h3>
             <p class="acceso-lema">Entra con tu cuenta para comentar y enviar mensajes a los administradores.</p>
             <form id="form-login-usuario">
                 <div class="campo-grupo">
-                    <label for="login-usuario">Usuario o correo</label>
-                    <input type="text" id="login-usuario" required placeholder="Tu usuario o correo">
+                    <label for="login-usuario">Usuario o correo electrónico</label>
+                    <input type="text" id="login-usuario" required placeholder="Tu usuario o correo electrónico">
                 </div>
                 <div class="campo-grupo">
                     <label for="login-password">Contraseña</label>
@@ -704,8 +719,8 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <div id="modal-crear-usuario" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-crear">
         <div class="modal-ventana">
             <button type="button" class="modal-cerrar" data-cerrar-modal="modal-crear-usuario" aria-label="Cerrar ventana">×</button>
-            <h3 id="titulo-modal-crear">Crear Usuario</h3>
-            <p class="acceso-lema">“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”</p>
+            <h3 id="titulo-modal-crear">Crear cuenta</h3>
+            <p class="acceso-lema">“SI LOS DE ABAJO NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”.</p>
             <form id="form-registro-usuario">
                 <div class="acceso-fila-dos">
                     <div class="campo-grupo">
@@ -713,7 +728,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
                         <input type="text" id="reg-usuario" required placeholder="Ej. voz_del_barrio">
                     </div>
                     <div class="campo-grupo">
-                        <label for="reg-comunidad">Junta de vecinos, sector o oficio</label>
+                        <label for="reg-comunidad">Junta de vecinos, sector u oficio</label>
                         <input type="text" id="reg-comunidad" required placeholder="Ej. Junta de vecinos, vendedor de coco...">
                     </div>
                 </div>
@@ -734,7 +749,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-donar">Crear Usuario</button>
+                <button type="submit" class="btn btn-donar">Crear cuenta</button>
             </form>
             <p id="msg-registro" class="mensaje-feedback"></p>
         </div>
@@ -746,13 +761,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
                 <img src="{CONFIG_PAGINA['collage_url']}" alt="Playas de República Dominicana">
             </div>
 
-            <div class="hero-text-area">
+            <div class="hero-text-area seccion-marco">
                 <div class="content-box">
                     <h1>{CONFIG_PAGINA['slogan_principal']}</h1>
                     <p>{CONFIG_PAGINA['descripcion_hero']}</p>
                     <div class="hero-actions">
-                        <a href="#mensajes-admin" class="btn btn-donar">Avisar Evento a Admin</a>
-                        <a href="#blog" class="btn">Ir al Blog</a>
+                        <a href="#mensajes-admin" class="btn btn-donar">Avisar evento a admin</a>
+                        <a href="#blog" class="btn">Ir al blog</a>
                     </div>
                 </div>
             </div>
@@ -764,7 +779,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <div class="ticker-inferior" aria-label="Mensaje ciudadano en movimiento">
         <div class="ticker-pista">
             <div class="ticker-frase">
-                🔥 EL PUEBLO UNIDO!!! <span class="resalte-alerta">•</span> UN GOBIERNO DE RODILLAS 🔥
+                🔥 EL PUEBLO UNIDO <span class="resalte-alerta">•</span> UN GOBIERNO DE RODILLAS 🔥
             </div>
         </div>
     </div>
@@ -774,7 +789,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <aside class="sidebar">
         <div class="sidebar-logo">
             <a href="#inicio" class="btn-inicio-img" title="Regresar al inicio" aria-label="Regresar al inicio">
-                <img src="{CONFIG_PAGINA['logo_url']}" alt="Corazón Dominicano Tropical - Ir al inicio">
+                <img src="{CONFIG_PAGINA['logo_url']}" alt="Corazón Dominicano Tropical — Ir al inicio">
             </a>
         </div>
 
@@ -783,19 +798,19 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         </ul>
 
         <div class="sidebar-socials">
-            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" title="Facebook">
+            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" rel="noopener noreferrer" title="Facebook">
                 <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" title="Instagram">
+            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" rel="noopener noreferrer" title="Instagram">
                 <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['linkedin']}" target="_blank" title="LinkedIn">
+            <a href="{CONFIG_PAGINA['redes_sociales']['linkedin']}" target="_blank" rel="noopener noreferrer" title="LinkedIn">
                 <svg viewBox="0 0 24 24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" title="YouTube">
+            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" rel="noopener noreferrer" title="YouTube">
                 <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" title="TikTok">
+            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" rel="noopener noreferrer" title="TikTok">
                 <svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
             </a>
         </div>
