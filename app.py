@@ -670,19 +670,33 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css">
+    <link rel="stylesheet" href="recursos/estilos.css?v=3">
 </head>
 <body>
+
+    <header class="barra-movil" id="barra-movil">
+        <a href="#inicio" class="logo-barra-movil" aria-label="Regresar al inicio">
+            <img id="logo-barra-movil" alt="Corazón Dominicano Tropical">
+        </a>
+    </header>
+
+    <button type="button" class="btn-menu-movil" id="btn-menu-movil" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-principal-6">
+        <span class="raya"></span>
+        <span class="raya"></span>
+        <span class="raya"></span>
+    </button>
 
     <div class="top-left-auth" id="barra-acceso" aria-label="Acceso de usuario">
         <button type="button" class="btn-auth-movil" id="btn-auth-movil" aria-label="Abrir acceso de usuario" aria-expanded="false">
             <svg class="icono-usuario" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5z"/></svg>
             <svg class="icono-cerrar" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
-        <span id="badge-usuario-activo" class="usuario-badge" style="display:none;"></span>
-        <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar Sesión</button>
-        <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear Usuario</button>
-        <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar Sesión</button>
+        <div class="acceso-panel">
+            <span id="badge-usuario-activo" class="usuario-badge" style="display:none;"></span>
+            <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar Sesión</button>
+            <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear Usuario</button>
+            <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar Sesión</button>
+        </div>
     </div>
 
     <div id="modal-login" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-login">
@@ -773,13 +787,6 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         </div>
     </div>
 
-    <button type="button" class="btn-menu-movil" id="btn-menu-movil" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-principal-6">
-        <span class="raya"></span>
-        <span class="raya"></span>
-        <span class="raya"></span>
-    </button>
-    <div class="menu-overlay" id="menu-overlay"></div>
-
     <aside class="sidebar-border"></aside>
 
     <aside class="sidebar">
@@ -815,7 +822,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js"></script>
+    <script src="recursos/app_logica.js?v=3"></script>
 </body>
 </html>
 """
