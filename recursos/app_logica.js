@@ -33,12 +33,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // -----------------------------------------------------------------
-    // CONTROLADOR UNIFICADO DE LOS 6 BOTONES DEL MENÚ (PC + TELÉFONO)
+    // MENÚ HAMBURGUESA MÓVIL (3 RAYAS) + CONTROLADOR UNIFICADO (PC + MÓVIL)
     // -----------------------------------------------------------------
     const sidebarEl = document.querySelector("aside.sidebar");
     const menu6Contenedor =
         document.getElementById("menu-principal-6") ||
         (sidebarEl ? sidebarEl.querySelector(".sidebar-nav") : null);
+
+    let btnHamburguesaMovil = document.getElementById("btn-hamburguesa-movil");
+    if (sidebarEl && !btnHamburguesaMovil) {
+        btnHamburguesaMovil = document.createElement("button");
+        btnHamburguesaMovil.type = "button";
+        btnHamburguesaMovil.id = "btn-hamburguesa-movil";
+        btnHamburguesaMovil.className = "btn-hamburguesa-movil";
+        btnHamburguesaMovil.setAttribute("aria-label", "Abrir menú");
+        btnHamburguesaMovil.setAttribute("aria-expanded", "false");
+        btnHamburguesaMovil.innerHTML = `
+            <span class="linea-hamburguesa"></span>
+            <span class="linea-hamburguesa"></span>
+            <span class="linea-hamburguesa"></span>
+        `;
+        const logoBox = sidebarEl.querySelector(".sidebar-logo");
+        if (logoBox) {
+            logoBox.insertAdjacentElement("afterend", btnHamburguesaMovil);
+        } else {
+            sidebarEl.prepend(btnHamburguesaMovil);
+        }
+    }
+
+    function alternarMenuMovil(forzarEstado) {
+        if (!sidebarEl) return;
+        const abrir = typeof forzarEstado === "boolean"
+            ? forzarEstado
+            : !sidebarEl.classList.contains("menu-movil-abierto");
+
+        sidebarEl.classList.toggle("menu-movil-abierto", abrir);
+        document.body.classList.toggle("menu-movil-bloqueado", abrir && window.innerWidth <= 900);
+
+        if (btnHamburguesaMovil) {
+            btnHamburguesaMovil.classList.toggle("abierto", abrir);
+            btnHamburguesaMovil.setAttribute("aria-expanded", String(abrir));
+            btnHamburguesaMovil.setAttribute("aria-label", abrir ? "Cerrar menú" : "Abrir menú");
+        }
+    }
+
+    if (btnHamburguesaMovil) {
+        btnHamburguesaMovil.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            alternarMenuMovil();
+        });
+    }
+
+    window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) {
+            alternarMenuMovil(false);
+        }
+    });
 
     const navLinks = menu6Contenedor
         ? Array.from(menu6Contenedor.querySelectorAll("a[data-menu-id], a[href^='#'], button[data-menu-id]"))
@@ -64,8 +115,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let temporizadorScroll = null;
 
     function obtenerCompensacionSuperior() {
-        if (window.innerWidth > 900 || !sidebarEl) return 16;
-        return (sidebarEl.offsetHeight || 80) + 12;
+        if (window.innerWidth > 900) return 16;
+        return 74;
     }
 
     function activarBotonMenuUnificado(seccionId, desplazar) {
@@ -76,6 +127,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (desplazar) {
+            alternarMenuMovil(false);
+
             const target = document.getElementById(seccionId);
             if (!target) return;
 
@@ -143,6 +196,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function abrirModal(modal) {
         if (!modal) return;
+        alternarMenuMovil(false);
         if (msgLogin) msgLogin.textContent = "";
         if (msgRegistro) msgRegistro.textContent = "";
         modal.classList.add("abierto");
@@ -155,6 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function irAPaginaPrincipal() {
         cerrarModales();
+        alternarMenuMovil(false);
         window.scrollTo({ top: 0, behavior: "smooth" });
         if (window.location.hash !== "#inicio") {
             try {
