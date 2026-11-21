@@ -56,7 +56,7 @@ body {
 }
 
 /* =================================================================
-   ESCRITORIO / PC (> 900px): MENÚ LATERAL DERECHO RESTAURADO
+   ESCRITORIO / PC (> 900px): MENÚ LATERAL DERECHO AMPLIADO
    ================================================================= */
 .top-left-auth {
     position: fixed;
@@ -135,7 +135,7 @@ aside.sidebar-border {
     position: fixed;
     right: 0;
     top: 0;
-    width: 277px;
+    width: 344px;
     height: 100vh;
     background: linear-gradient(
         to bottom,
@@ -154,7 +154,7 @@ aside.sidebar {
     right: 0;
     top: 0;
     left: auto;
-    width: 265px;
+    width: 330px;
     height: 100vh;
     background-color: #111111;
     background-image:
@@ -167,7 +167,7 @@ aside.sidebar {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 26px 20px 26px 42px;
+    padding: 26px 24px 26px 48px;
     z-index: 10000;
     pointer-events: auto;
     clip-path: polygon(15% 0, 100% 0, 100% 100%, 0% 100%);
@@ -212,9 +212,9 @@ aside.sidebar {
 }
 
 .sidebar-logo img {
-    width: 150px;
+    width: 165px;
     max-width: 100%;
-    max-height: 140px;
+    max-height: 150px;
     height: auto;
     object-fit: contain;
     display: block;
@@ -242,7 +242,7 @@ aside.sidebar {
     position: relative;
     color: var(--text-color);
     text-decoration: none;
-    font-size: 0.86rem;
+    font-size: 0.9rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 1.8px;
@@ -321,9 +321,9 @@ aside.sidebar {
 }
 
 .main-content {
-    width: calc(100% - 290px);
-    max-width: calc(100% - 290px);
-    margin-right: 290px;
+    width: calc(100% - 355px);
+    max-width: calc(100% - 355px);
+    margin-right: 355px;
     margin-left: 0;
     position: relative;
     z-index: 1;
@@ -1391,7 +1391,7 @@ section.seccion-blog:nth-of-type(n) .content-box {
     position: fixed;
     left: 0;
     bottom: 0;
-    width: calc(100% - 265px);
+    width: calc(100% - 330px);
     height: 48px;
     background: linear-gradient(90deg, #0b0b0b 0%, #1a0609 50%, #061326 100%);
     border-top: 3px solid transparent;
