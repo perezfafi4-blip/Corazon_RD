@@ -146,7 +146,7 @@ CONFIG_PAGINA = {
     "ideales_bloque": {
         "badge": "EL PUEBLO TIENE EL PODER",
         "titulo": (
-            "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ NO EN LAS PROMESAS"
+            "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ SIN ESPERAR PROMESAS BASIAS"
             " DEL GOBIERNO"
         ),
         "pilares": [
