@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: corazon-rd
+    runtime: python
+    buildCommand: python app.py --build-only
+    startCommand: python -m http.server $PORT
