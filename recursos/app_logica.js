@@ -1045,9 +1045,13 @@ document.addEventListener("DOMContentLoaded", () => {
 (function () {
     const body = document.body;
     const btnMenu = document.getElementById("btn-menu-movil");
-    const overlay = document.getElementById("menu-overlay");
     const barraAcceso = document.getElementById("barra-acceso");
     const btnAuth = document.getElementById("btn-auth-movil");
+
+    // El logo de la barra superior usa la misma imagen del menú lateral
+    const logoMenu = document.querySelector(".sidebar-logo img");
+    const logoBarra = document.getElementById("logo-barra-movil");
+    if (logoMenu && logoBarra) logoBarra.src = logoMenu.src;
 
     function abrirMenu(abrir) {
         body.classList.toggle("menu-abierto", abrir);
@@ -1069,18 +1073,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (btnMenu) btnMenu.addEventListener("click", () => abrirMenu(!body.classList.contains("menu-abierto")));
-    if (overlay) overlay.addEventListener("click", () => abrirMenu(false));
     if (btnAuth) btnAuth.addEventListener("click", () => abrirAcceso(!barraAcceso.classList.contains("abierto")));
 
-    // Al tocar una opción del menú, se esconde solo
-    document.querySelectorAll("#menu-principal-6 a, .btn-inicio-img").forEach(el => {
+    // Al tocar una opción del menú (o el logo), el menú se esconde solo
+    document.querySelectorAll("#menu-principal-6 a, .logo-barra-movil").forEach(el => {
         el.addEventListener("click", () => abrirMenu(false));
     });
 
-    // Al elegir iniciar sesión, crear usuario o cerrar sesión, la barra se guarda
+    // Al elegir iniciar sesión, crear usuario o cerrar sesión, el panel se guarda
     ["btn-top-login", "btn-top-crear", "btn-top-cerrar"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener("click", () => abrirAcceso(false));
+    });
+
+    // Tocar fuera del panel de acceso lo guarda
+    document.addEventListener("click", (e) => {
+        if (barraAcceso && barraAcceso.classList.contains("abierto") && !barraAcceso.contains(e.target)) {
+            abrirAcceso(false);
+        }
     });
 
     document.addEventListener("keydown", (e) => {
