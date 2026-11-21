@@ -1038,3 +1038,8 @@ document.addEventListener("DOMContentLoaded", () => {
     renderizarTodo(null);
     renderizarMensajesAdmin();
 });
+
+    actualizarEstadoAccesoUI();
+    renderizarTodo(null);
+    renderizarMensajesAdmin();
+});
