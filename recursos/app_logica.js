@@ -181,8 +181,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: true });
 
     // -----------------------------------------------------------------
-    // SESIÓN Y MODALES
+    // BOTÓN DESPLEGABLE CON ÍCONO DE PERSONA (REGISTRO / INICIAR SESIÓN)
     // -----------------------------------------------------------------
+    const topAuthContenedor = document.querySelector(".top-left-auth");
     const modalLogin = document.getElementById("modal-login");
     const modalCrear = document.getElementById("modal-crear-usuario");
     const btnTopLogin = document.getElementById("btn-top-login");
@@ -194,9 +195,62 @@ document.addEventListener("DOMContentLoaded", () => {
     const msgRegistro = document.getElementById("msg-registro");
     const msgLogin = document.getElementById("msg-login");
 
+    let btnPersonaToggle = document.getElementById("btn-persona-toggle");
+    let menuAuthDesplegable = document.getElementById("menu-auth-desplegable");
+
+    if (topAuthContenedor && !btnPersonaToggle) {
+        btnPersonaToggle = document.createElement("button");
+        btnPersonaToggle.type = "button";
+        btnPersonaToggle.id = "btn-persona-toggle";
+        btnPersonaToggle.className = "btn-persona-toggle";
+        btnPersonaToggle.setAttribute("aria-label", "Cuenta de usuario");
+        btnPersonaToggle.setAttribute("aria-expanded", "false");
+        btnPersonaToggle.innerHTML = `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z"/>
+            </svg>
+        `;
+
+        menuAuthDesplegable = document.createElement("div");
+        menuAuthDesplegable.id = "menu-auth-desplegable";
+        menuAuthDesplegable.className = "menu-auth-desplegable";
+
+        if (btnTopLogin) menuAuthDesplegable.appendChild(btnTopLogin);
+        if (btnTopCrear) menuAuthDesplegable.appendChild(btnTopCrear);
+
+        topAuthContenedor.prepend(menuAuthDesplegable);
+        topAuthContenedor.prepend(btnPersonaToggle);
+    }
+
+    function alternarMenuAuth(forzarEstado) {
+        if (!btnPersonaToggle || !menuAuthDesplegable) return;
+        const abrir = typeof forzarEstado === "boolean"
+            ? forzarEstado
+            : !menuAuthDesplegable.classList.contains("abierto");
+
+        menuAuthDesplegable.classList.toggle("abierto", abrir);
+        btnPersonaToggle.classList.toggle("abierto", abrir);
+        btnPersonaToggle.setAttribute("aria-expanded", String(abrir));
+    }
+
+    if (btnPersonaToggle) {
+        btnPersonaToggle.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            alternarMenuAuth();
+        });
+    }
+
+    document.addEventListener("click", (e) => {
+        if (menuAuthDesplegable && !e.target.closest(".top-left-auth")) {
+            alternarMenuAuth(false);
+        }
+    });
+
     function abrirModal(modal) {
         if (!modal) return;
         alternarMenuMovil(false);
+        alternarMenuAuth(false);
         if (msgLogin) msgLogin.textContent = "";
         if (msgRegistro) msgRegistro.textContent = "";
         modal.classList.add("abierto");
@@ -210,6 +264,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function irAPaginaPrincipal() {
         cerrarModales();
         alternarMenuMovil(false);
+        alternarMenuAuth(false);
         window.scrollTo({ top: 0, behavior: "smooth" });
         if (window.location.hash !== "#inicio") {
             try {
@@ -1015,6 +1070,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 badgeUsuarioActivo.classList.toggle("es-admin", adminActivo);
                 badgeUsuarioActivo.style.display = "inline-block";
             }
+            if (btnPersonaToggle) btnPersonaToggle.style.display = "none";
+            if (menuAuthDesplegable) menuAuthDesplegable.classList.remove("abierto");
             if (btnTopLogin) btnTopLogin.style.display = "none";
             if (btnTopCrear) btnTopCrear.style.display = "none";
             if (btnTopCerrar) btnTopCerrar.style.display = "inline-block";
@@ -1039,6 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 badgeUsuarioActivo.classList.remove("es-admin");
                 badgeUsuarioActivo.style.display = "none";
             }
+            if (btnPersonaToggle) btnPersonaToggle.style.display = "inline-flex";
             if (btnTopLogin) btnTopLogin.style.display = "inline-block";
             if (btnTopCrear) btnTopCrear.style.display = "inline-block";
             if (btnTopCerrar) btnTopCerrar.style.display = "none";
