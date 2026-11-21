@@ -136,6 +136,8 @@ CONFIG_PAGINA = {
     ),
     "admin_defecto": {
         "usuario": "fafi_admin",
+        "cedula": os.environ.get("FAFI_ADMIN_CEDULA", "000-0000000-0"),
+        "provincia": "Distrito Nacional",
         "password": os.environ.get("FAFI_ADMIN_PASSWORD", "1234rd"),
         "comunidad": "Administración Central CORAZÓN RD",
         "email": "admin@corazonrd.org",
@@ -700,11 +702,11 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <div class="modal-ventana">
             <button type="button" class="modal-cerrar" data-cerrar-modal="modal-login" aria-label="Cerrar ventana">×</button>
             <h3 id="titulo-modal-login">Iniciar sesión</h3>
-            <p class="acceso-lema">Entra con tu cuenta para comentar y enviar mensajes a los administradores.</p>
+            <p class="acceso-lema">Entra con tu cédula y contraseña para comentar y enviar mensajes a los administradores.</p>
             <form id="form-login-usuario">
                 <div class="campo-grupo">
-                    <label for="login-usuario">Usuario o correo electrónico</label>
-                    <input type="text" id="login-usuario" required placeholder="Tu usuario o correo electrónico">
+                    <label for="login-usuario">Cédula</label>
+                    <input type="text" id="login-usuario" required placeholder="Ej. 000-0000000-0" maxlength="13">
                 </div>
                 <div class="campo-grupo">
                     <label for="login-password">Contraseña</label>
@@ -722,15 +724,58 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
             <h3 id="titulo-modal-crear">Crear cuenta</h3>
             <p class="acceso-lema">“SI LOS DE ABAJO NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”.</p>
             <form id="form-registro-usuario">
-                <div class="acceso-fila-dos">
-                    <div class="campo-grupo">
-                        <label for="reg-usuario">Nombre de usuario</label>
-                        <input type="text" id="reg-usuario" required placeholder="Ej. voz_del_barrio">
-                    </div>
-                    <div class="campo-grupo">
-                        <label for="reg-comunidad">Junta de vecinos, sector u oficio</label>
-                        <input type="text" id="reg-comunidad" required placeholder="Ej. Junta de vecinos, vendedor de coco...">
-                    </div>
+                <div class="campo-grupo">
+                    <label for="reg-usuario">Nombre de usuario</label>
+                    <input type="text" id="reg-usuario" required placeholder="Ej. voz_del_barrio">
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-cedula">Cédula</label>
+                    <input type="text" id="reg-cedula" required placeholder="Ej. 000-0000000-0" maxlength="13">
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-provincia">Provincia</label>
+                    <select id="reg-provincia" required>
+                        <option value="">Selecciona tu provincia...</option>
+                        <option value="Azua">Azua</option>
+                        <option value="Baoruco">Baoruco</option>
+                        <option value="Barahona">Barahona</option>
+                        <option value="Dajabón">Dajabón</option>
+                        <option value="Distrito Nacional">Distrito Nacional</option>
+                        <option value="Duarte">Duarte</option>
+                        <option value="Elías Piña">Elías Piña</option>
+                        <option value="El Seibo">El Seibo</option>
+                        <option value="Espaillat">Espaillat</option>
+                        <option value="Hato Mayor">Hato Mayor</option>
+                        <option value="Hermanas Mirabal">Hermanas Mirabal</option>
+                        <option value="Independencia">Independencia</option>
+                        <option value="La Altagracia">La Altagracia</option>
+                        <option value="La Romana">La Romana</option>
+                        <option value="La Vega">La Vega</option>
+                        <option value="María Trinidad Sánchez">María Trinidad Sánchez</option>
+                        <option value="Monseñor Nouel">Monseñor Nouel</option>
+                        <option value="Monte Cristi">Monte Cristi</option>
+                        <option value="Monte Plata">Monte Plata</option>
+                        <option value="Pedernales">Pedernales</option>
+                        <option value="Peravia">Peravia</option>
+                        <option value="Puerto Plata">Puerto Plata</option>
+                        <option value="Samaná">Samaná</option>
+                        <option value="San Cristóbal">San Cristóbal</option>
+                        <option value="San José de Ocoa">San José de Ocoa</option>
+                        <option value="San Juan">San Juan</option>
+                        <option value="San Pedro de Macorís">San Pedro de Macorís</option>
+                        <option value="Sánchez Ramírez">Sánchez Ramírez</option>
+                        <option value="Santiago">Santiago</option>
+                        <option value="Santiago Rodríguez">Santiago Rodríguez</option>
+                        <option value="Santo Domingo">Santo Domingo</option>
+                        <option value="Valverde">Valverde</option>
+                    </select>
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-comunidad">Junta de vecinos, sector u oficio</label>
+                    <input type="text" id="reg-comunidad" required placeholder="Ej. Junta de vecinos, vendedor de coco...">
                 </div>
 
                 <div class="campo-grupo">
