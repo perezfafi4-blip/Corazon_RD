@@ -670,7 +670,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=3">
+    <link rel="stylesheet" href="recursos/estilos.css?v=4">
 </head>
 <body>
 
@@ -703,11 +703,11 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <div class="modal-ventana">
             <button type="button" class="modal-cerrar" data-cerrar-modal="modal-login" aria-label="Cerrar ventana">×</button>
             <h3 id="titulo-modal-login">Iniciar Sesión</h3>
-            <p class="acceso-lema">Entra con tu cuenta para comentar y enviar mensajes a los administradores.</p>
+            <p class="acceso-lema">Entra con tu cédula y tu contraseña para comentar y enviar mensajes a los administradores.</p>
             <form id="form-login-usuario">
                 <div class="campo-grupo">
-                    <label for="login-usuario">Usuario o correo</label>
-                    <input type="text" id="login-usuario" required placeholder="Tu usuario o correo">
+                    <label for="login-usuario">Cédula</label>
+                    <input type="text" id="login-usuario" required placeholder="000-0000000-0" maxlength="40" autocomplete="username">
                 </div>
                 <div class="campo-grupo">
                     <label for="login-password">Contraseña</label>
@@ -725,6 +725,16 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
             <h3 id="titulo-modal-crear">Crear Usuario</h3>
             <p class="acceso-lema">“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”</p>
             <form id="form-registro-usuario">
+                <div class="campo-grupo">
+                    <label for="reg-cedula">Cédula</label>
+                    <input type="text" id="reg-cedula" required placeholder="000-0000000-0" inputmode="numeric" maxlength="13" autocomplete="off">
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-nombre">Nombre completo</label>
+                    <input type="text" id="reg-nombre" required placeholder="Nombre y apellidos" autocomplete="name">
+                </div>
+
                 <div class="acceso-fila-dos">
                     <div class="campo-grupo">
                         <label for="reg-usuario">Nombre de usuario</label>
@@ -751,6 +761,11 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
                         <input type="password" id="reg-confirmar-password" required placeholder="Repite tu contraseña">
                     </div>
                 </div>
+
+                <label class="campo-terminos" for="reg-terminos">
+                    <input type="checkbox" id="reg-terminos" required>
+                    <span>Acepto todos los términos y políticas de esta página</span>
+                </label>
 
                 <button type="submit" class="btn btn-donar">Crear Usuario</button>
             </form>
@@ -822,7 +837,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=3"></script>
+    <script src="recursos/app_logica.js?v=4"></script>
 </body>
 </html>
 """
