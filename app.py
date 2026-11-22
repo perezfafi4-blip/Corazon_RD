@@ -500,6 +500,46 @@ def render_seccion_boton(boton_id):
                         <h2>{sec.get('titulo_seccion', 'PROTESTA')}</h2>
                         {desc_html}
                     </div>
+                    <div id="barra-admin-protesta" class="admin-protesta-barra">
+                        <button type="button" id="btn-abrir-form-protesta" class="btn btn-donar" aria-expanded="false">+ Subir protesta o mensaje</button>
+
+                        <div id="panel-admin-protesta" class="admin-panel-box admin-protesta-panel">
+                            <h3>Panel de Administración — Subir protesta</h3>
+                            <form id="form-publicar-protesta">
+                                <div class="acceso-fila-dos">
+                                    <div class="campo-grupo">
+                                        <label for="prot-titulo">Título de la protesta</label>
+                                        <input type="text" id="prot-titulo" required maxlength="120" placeholder="Ej. Marcha por el agua potable">
+                                    </div>
+                                    <div class="campo-grupo">
+                                        <label for="prot-categoria">Categoría</label>
+                                        <input type="text" id="prot-categoria" required maxlength="60" placeholder="Ej. Acción Ciudadana">
+                                    </div>
+                                </div>
+
+                                <div class="campo-grupo">
+                                    <label for="prot-mensaje">Mensaje a publicar</label>
+                                    <textarea id="prot-mensaje" required maxlength="3000" placeholder="Escribe aquí el mensaje de la protesta..."></textarea>
+                                </div>
+
+                                <div class="campo-grupo">
+                                    <label for="prot-imagen">Imagen (opcional: súbela desde tu PC/teléfono o pega un enlace)</label>
+                                    <div class="subir-imagen-fila">
+                                        <button type="button" id="btn-prot-subir-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
+                                        <button type="button" id="btn-prot-quitar" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
+                                        <input type="file" id="input-prot-archivo" accept="image/*" style="display:none;">
+                                        <span id="nombre-prot-archivo" style="font-size:0.84rem; color:#ffd166;"></span>
+                                    </div>
+                                    <input type="text" id="prot-imagen" placeholder="O pega aquí un enlace de imagen (https://...)">
+                                    <img id="vista-previa-prot" class="vista-previa-img" alt="Vista previa de la imagen">
+                                </div>
+
+                                <button type="submit" class="btn btn-donar btn-pequeno">Publicar protesta</button>
+                            </form>
+                            <p id="msg-prot-admin" class="mensaje-feedback"></p>
+                        </div>
+                    </div>
+
                     <div id="protesta-contenedor" class="grid"></div>
                 </div>
             </div>
@@ -745,7 +785,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=9">
+    <link rel="stylesheet" href="recursos/estilos.css?v=10">
 </head>
 <body>
 
@@ -909,7 +949,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=9"></script>
+    <script src="recursos/app_logica.js?v=10"></script>
 </body>
 </html>
 """
