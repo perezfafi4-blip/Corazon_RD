@@ -22,7 +22,7 @@ function escaparHtml(texto) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    const cfg = window.CORAZON_RD_CONFIG || {};
+    const cfg = window.CORAZON_RD_CONFIG || window.CORAZON_RD_DATOS || {};
     const ADMIN_DEFECTO = cfg.adminDefecto || {};
     const NOTICIAS_DEFECTO = Array.isArray(cfg.noticiasDefecto) ? cfg.noticiasDefecto : [];
     const PROTESTAS_DEFECTO = Array.isArray(cfg.protestasDefecto) ? cfg.protestasDefecto : [];
