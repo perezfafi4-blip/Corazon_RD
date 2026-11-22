@@ -17,6 +17,13 @@ patron_src = ""
 collage_src = ""
 
 EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+EXTENSIONES_VIDEO = (".mp4", ".webm", ".m4v", ".mov")
+TIPOS_VIDEO = {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+}
 
 
 def normalizar_texto(texto):
@@ -63,6 +70,7 @@ def obtener_rutas_busqueda():
 candidatos_logo = []
 candidatos_patron = []
 candidatos_collage = []
+candidatos_video = []
 
 for carpeta in obtener_rutas_busqueda():
   try:
@@ -77,6 +85,16 @@ for carpeta in obtener_rutas_busqueda():
 
     nombre_norm = normalizar_texto(archivo)
     tiene_extension = nombre_norm.endswith(EXTENSIONES_IMAGEN)
+
+    # Video pequeño de la imagen principal (se busca en las mismas carpetas)
+    if nombre_norm.endswith(EXTENSIONES_VIDEO):
+      prioridad = (
+          0
+          if any(k in nombre_norm for k in ("principal", "playa", "rd", "collage", "hero"))
+          else 1
+      )
+      candidatos_video.append((prioridad, ruta_completa))
+      continue
 
     if "corazon dominicano tropical" in nombre_norm or nombre_norm.startswith(
         "logo_corazon"
@@ -123,6 +141,22 @@ if candidatos_patron:
 if candidatos_collage:
   candidatos_collage.sort(key=lambda x: x[0])
   collage_src = cargar_imagen_base64(candidatos_collage[0][1])
+
+VIDEO_RUTA = ""
+VIDEO_MIME = "video/mp4"
+if candidatos_video:
+  candidatos_video.sort(key=lambda x: x[0])
+  VIDEO_RUTA = candidatos_video[0][1]
+  VIDEO_MIME = TIPOS_VIDEO.get(os.path.splitext(VIDEO_RUTA)[1].lower(), "video/mp4")
+  print(f"Video de la imagen principal: {VIDEO_RUTA}", flush=True)
+
+# Pequeño video sobre la imagen principal: sin sonido, en bucle (si no hay video, no se muestra)
+VIDEO_HERO_HTML = (
+    '<video class="video-hero" autoplay muted loop playsinline preload="auto" '
+    'disablepictureinpicture aria-hidden="true" src="/video-principal"></video>'
+    if VIDEO_RUTA
+    else ""
+)
 
 
 # =====================================================================
@@ -670,7 +704,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=4">
+    <link rel="stylesheet" href="recursos/estilos.css?v=5">
 </head>
 <body>
 
@@ -777,6 +811,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <section id="inicio" class="hero">
             <div class="collage-container">
                 <img src="{CONFIG_PAGINA['collage_url']}" alt="Playas de República Dominicana">
+                {VIDEO_HERO_HTML}
             </div>
 
             <div class="hero-text-area">
@@ -837,7 +872,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=4"></script>
+    <script src="recursos/app_logica.js?v=5"></script>
 </body>
 </html>
 """
@@ -857,7 +892,60 @@ class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
       self.end_headers()
       self.wfile.write(cuerpo)
       return
+    if ruta_limpia == "/video-principal" and VIDEO_RUTA:
+      self.servir_video()
+      return
     return super().do_GET()
+
+  def servir_video(self):
+    try:
+      tamano = os.path.getsize(VIDEO_RUTA)
+    except OSError:
+      self.send_error(404, "Video no encontrado")
+      return
+
+    inicio, fin, parcial = 0, tamano - 1, False
+    rango = self.headers.get("Range", "")
+    if rango.startswith("bytes="):
+      try:
+        desde, _, hasta = rango[6:].partition("-")
+        if desde == "":
+          inicio = max(tamano - int(hasta), 0)
+        else:
+          inicio = int(desde)
+          if hasta:
+            fin = min(int(hasta), tamano - 1)
+        parcial = True
+      except ValueError:
+        inicio, fin, parcial = 0, tamano - 1, False
+      if parcial and (inicio > fin or inicio >= tamano):
+        self.send_response(416)
+        self.send_header("Content-Range", f"bytes */{tamano}")
+        self.end_headers()
+        return
+
+    longitud = fin - inicio + 1
+    self.send_response(206 if parcial else 200)
+    self.send_header("Content-Type", VIDEO_MIME)
+    self.send_header("Accept-Ranges", "bytes")
+    self.send_header("Content-Length", str(longitud))
+    if parcial:
+      self.send_header("Content-Range", f"bytes {inicio}-{fin}/{tamano}")
+    self.send_header("Cache-Control", "public, max-age=3600")
+    self.end_headers()
+
+    try:
+      with open(VIDEO_RUTA, "rb") as archivo:
+        archivo.seek(inicio)
+        restante = longitud
+        while restante > 0:
+          bloque = archivo.read(min(65536, restante))
+          if not bloque:
+            break
+          self.wfile.write(bloque)
+          restante -= len(bloque)
+    except (BrokenPipeError, ConnectionResetError):
+      pass
 
   def log_message(self, format, *args):
     sys.stderr.write(f"[CorazonRD] {self.address_string()} - {format % args}\n")
