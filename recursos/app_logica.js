@@ -1164,3 +1164,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 })();
+
+
+// ---------------------------------------------------------------------
+// 🎬 Video pequeño de la imagen principal: siempre sin sonido y en bucle
+// ---------------------------------------------------------------------
+(function () {
+    const video = document.querySelector(".video-hero");
+    if (!video) return;
+
+    video.muted = true;
+    video.defaultMuted = true;
+    video.loop = true;
+
+    function reproducir() {
+        const intento = video.play();
+        if (intento && typeof intento.catch === "function") intento.catch(() => {});
+    }
+
+    reproducir();
+    // Si el navegador bloqueó el autoplay, arranca con el primer toque
+    ["touchstart", "click", "scroll"].forEach(evento => {
+        window.addEventListener(evento, reproducir, { once: true, passive: true });
+    });
+})();
