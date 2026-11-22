@@ -1,12 +1,15 @@
 import base64
 import functools
+import hmac
 import http.server
 import json
 import os
 import socketserver
 import sys
 import threading
+import time
 import unicodedata
+import urllib.parse
 import webbrowser
 
 # =====================================================================
@@ -161,6 +164,26 @@ VIDEO_HERO_HTML = (
 
 
 # =====================================================================
+# 🔐 CLAVE DEL ADMINISTRADOR (solo vive en el servidor, nunca en el código)
+#   1) Variable de entorno FAFI_ADMIN_PASSWORD (recomendado en Render), o
+#   2) Archivo local ".admin_clave" junto a app.py (no se sube a GitHub ni se sirve)
+# =====================================================================
+def cargar_clave_admin():
+  clave = os.environ.get("FAFI_ADMIN_PASSWORD", "").strip()
+  if clave:
+    return clave
+  ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".admin_clave")
+  try:
+    with open(ruta, encoding="utf-8") as archivo:
+      return archivo.read().strip()
+  except OSError:
+    return ""
+
+
+CLAVE_ADMIN = cargar_clave_admin()
+USUARIO_ADMIN = "fafi_admin"
+
+# =====================================================================
 # 🧩 CONFIGURACIÓN Y LOS 6 BOTONES DEL MENÚ EN UN SOLO LUGAR
 # =====================================================================
 CONFIG_PAGINA = {
@@ -171,8 +194,7 @@ CONFIG_PAGINA = {
         " fuerza con hechos."
     ),
     "admin_defecto": {
-        "usuario": "fafi_admin",
-        "password": os.environ.get("FAFI_ADMIN_PASSWORD", "1234rd"),
+        "usuario": USUARIO_ADMIN,
         "comunidad": "Administración Central CORAZÓN RD",
         "email": "admin@corazonrd.org",
         "rol": "admin",
@@ -353,11 +375,10 @@ CONFIG_PAGINA = {
     "patron_url": patron_src,
     "collage_url": collage_src if collage_src else "playa_rd.png",
     "redes_sociales": {
-        "facebook": "https://facebook.com",
-        "instagram": "https://instagram.com",
-        "linkedin": "https://linkedin.com",
-        "youtube": "https://youtube.com",
-        "tiktok": "https://tiktok.com",
+        "facebook": "https://www.facebook.com/profile.php?id=61596766414160",
+        "instagram": "https://www.instagram.com/fafirojo12/",
+        "youtube": "https://www.youtube.com/@corazon-rd",
+        "tiktok": "https://www.tiktok.com/@corazonrd",
     },
     "secciones": [
         {
@@ -709,7 +730,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=6">
+    <link rel="stylesheet" href="recursos/estilos.css?v=8">
 </head>
 <body>
 
@@ -855,19 +876,16 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         </ul>
 
         <div class="sidebar-socials">
-            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" title="Facebook">
+            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" rel="noopener noreferrer" title="Facebook" aria-label="Facebook de Corazón RD">
                 <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" title="Instagram">
+            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram de Corazón RD">
                 <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['linkedin']}" target="_blank" title="LinkedIn">
-                <svg viewBox="0 0 24 24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
-            </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" title="YouTube">
+            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="YouTube de Corazón RD">
                 <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" title="TikTok">
+            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" rel="noopener noreferrer" title="TikTok" aria-label="TikTok de Corazón RD">
                 <svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
             </a>
         </div>
@@ -876,15 +894,41 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=6"></script>
+    <script src="recursos/app_logica.js?v=8"></script>
 </body>
 </html>
 """
 
 
+EXTENSIONES_PUBLICAS = (
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico",
+    ".woff", ".woff2", ".ttf",
+)
+INTENTOS_ADMIN = {}
+LIMITE_INTENTOS_ADMIN = 5
+VENTANA_INTENTOS_SEG = 600
+LIMITE_GLOBAL_ADMIN = 30
+
+
 class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, directory=".", **kwargs)
+
+  # --- Solo se entregan estilos, scripts e imágenes: nunca app.py, claves ni carpetas ---
+  def ruta_publica(self, ruta):
+    ruta = urllib.parse.unquote(ruta)
+    if ".." in ruta or "\\" in ruta or ruta.endswith("/"):
+      return False
+    partes = [parte for parte in ruta.split("/") if parte]
+    if not partes or any(parte.startswith(".") for parte in partes):
+      return False
+    return os.path.splitext(partes[-1])[1].lower() in EXTENSIONES_PUBLICAS
+
+  def do_HEAD(self):
+    ruta_limpia = self.path.split("?")[0]
+    if ruta_limpia in ("", "/", "/index.html") or self.ruta_publica(ruta_limpia):
+      return super().do_HEAD()
+    self.send_error(404, "No encontrado")
 
   def do_GET(self):
     ruta_limpia = self.path.split("?")[0]
@@ -899,7 +943,68 @@ class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
     if ruta_limpia == "/video-principal" and VIDEO_RUTA:
       self.servir_video()
       return
+    if not self.ruta_publica(ruta_limpia):
+      self.send_error(404, "No encontrado")
+      return
     return super().do_GET()
+
+  # --- Acceso del administrador: la clave se valida aquí, en el servidor ---
+  def responder_json(self, codigo, datos):
+    cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
+    self.send_response(codigo)
+    self.send_header("Content-Type", "application/json; charset=utf-8")
+    self.send_header("Content-Length", str(len(cuerpo)))
+    self.send_header("Cache-Control", "no-store")
+    self.end_headers()
+    self.wfile.write(cuerpo)
+
+  def ip_cliente(self):
+    reenviada = self.headers.get("X-Forwarded-For", "")
+    if reenviada:
+      return reenviada.split(",")[-1].strip()
+    return self.client_address[0]
+
+  def do_POST(self):
+    if self.path.split("?")[0] != "/api/admin-login":
+      self.send_error(404, "No encontrado")
+      return
+
+    if not CLAVE_ADMIN:
+      self.responder_json(503, {"ok": False, "error": "admin_no_configurado"})
+      return
+
+    ahora = time.time()
+    ip = self.ip_cliente()
+    for clave_ip in list(INTENTOS_ADMIN):
+      INTENTOS_ADMIN[clave_ip] = [t for t in INTENTOS_ADMIN[clave_ip] if ahora - t < VENTANA_INTENTOS_SEG]
+      if not INTENTOS_ADMIN[clave_ip]:
+        del INTENTOS_ADMIN[clave_ip]
+    fallos_ip = len(INTENTOS_ADMIN.get(ip, []))
+    fallos_total = sum(len(v) for v in INTENTOS_ADMIN.values())
+    if fallos_ip >= LIMITE_INTENTOS_ADMIN or fallos_total >= LIMITE_GLOBAL_ADMIN:
+      self.responder_json(429, {"ok": False, "error": "demasiados_intentos"})
+      return
+
+    try:
+      largo = int(self.headers.get("Content-Length", "0"))
+      if largo <= 0 or largo > 2048:
+        raise ValueError
+      datos = json.loads(self.rfile.read(largo).decode("utf-8"))
+      usuario = str(datos.get("usuario", "")).strip().lower()
+      clave = str(datos.get("password", ""))
+    except (ValueError, UnicodeDecodeError, AttributeError):
+      self.responder_json(400, {"ok": False, "error": "solicitud_invalida"})
+      return
+
+    usuario_ok = hmac.compare_digest(usuario.encode("utf-8"), USUARIO_ADMIN.encode("utf-8"))
+    clave_ok = hmac.compare_digest(clave.encode("utf-8"), CLAVE_ADMIN.encode("utf-8"))
+    if usuario_ok and clave_ok:
+      INTENTOS_ADMIN.pop(ip, None)
+      self.responder_json(200, {"ok": True, "usuario": USUARIO_ADMIN})
+      return
+
+    INTENTOS_ADMIN.setdefault(ip, []).append(ahora)
+    self.responder_json(401, {"ok": False, "error": "credenciales"})
 
   def servir_video(self):
     try:
@@ -970,6 +1075,12 @@ if __name__ == "__main__":
   host = "0.0.0.0"
   servidor = ServidorReutilizable((host, puerto), ManejadorCorazonRD)
   print(f"Servidor CORAZÓN RD escuchando en http://{host}:{puerto}", flush=True)
+  if not CLAVE_ADMIN:
+    print(
+        "AVISO: no hay clave de administrador. Define FAFI_ADMIN_PASSWORD o crea el archivo "
+        ".admin_clave junto a app.py para poder entrar como admin.",
+        flush=True,
+    )
   abrir_navegador_local(f"http://127.0.0.1:{puerto}")
   try:
     servidor.serve_forever()
