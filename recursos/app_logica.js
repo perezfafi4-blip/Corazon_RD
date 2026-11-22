@@ -1,1190 +1,1145 @@
-const REACCIONES_DESPLEGABLES = [
-    { id: "like", emoji: "👍", nombre: "Me gusta" },
-    { id: "love", emoji: "❤️", nombre: "Me encanta" },
-    { id: "care", emoji: "🥰", nombre: "Me importa" },
-    { id: "fire", emoji: "🔥", nombre: "Fuego" },
-    { id: "wow", emoji: "😮", nombre: "Me asombra" },
-    { id: "sad", emoji: "😢", nombre: "Me entristece" },
-    { id: "angry", emoji: "😡", nombre: "Me enoja" }
-];
+import base64
+import functools
+import hmac
+import http.server
+import json
+import os
+import socketserver
+import sys
+import threading
+import time
+import unicodedata
+import urllib.parse
+import webbrowser
 
-function obtenerDatosReaccion(reaccionId) {
-    return REACCIONES_DESPLEGABLES.find(r => r.id === reaccionId) || REACCIONES_DESPLEGABLES[0];
+# =====================================================================
+# 🛠️ DETECCIÓN INTELIGENTE DE LOGO, PATRÓN Y COLLAGE TURÍSTICO
+# =====================================================================
+logo_src = "https://picsum.photos/id/10/140/60"
+patron_src = ""
+collage_src = ""
+
+EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+EXTENSIONES_VIDEO = (".mp4", ".webm", ".m4v", ".mov")
+TIPOS_VIDEO = {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
 }
 
-function escaparHtml(texto) {
-    return String(texto)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+
+def normalizar_texto(texto):
+  nfkd = unicodedata.normalize("NFKD", texto.lower())
+  return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def cargar_imagen_base64(ruta_archivo):
+  nombre_lower = ruta_archivo.lower()
+  with open(ruta_archivo, "rb") as img_file:
+    encoded = base64.b64encode(img_file.read()).decode("utf-8")
+    if nombre_lower.endswith(".png"):
+      mime = "image/png"
+    elif nombre_lower.endswith(".webp"):
+      mime = "image/webp"
+    elif nombre_lower.endswith(".gif"):
+      mime = "image/gif"
+    else:
+      mime = "image/jpeg"
+    return f"data:{mime};base64,{encoded}"
+
+
+def obtener_rutas_busqueda():
+  rutas = ["."]
+  escritorios = [
+      os.path.expanduser("~/Desktop"),
+      os.path.expanduser("~/OneDrive/Desktop"),
+      os.path.expanduser("~/OneDrive/Escritorio"),
+      os.path.expanduser("~/Escritorio"),
+  ]
+  for esc in escritorios:
+    if os.path.isdir(esc):
+      rutas.append(esc)
+      carpeta_rd = os.path.join(esc, "pagina rd")
+      if os.path.isdir(carpeta_rd):
+        rutas.append(carpeta_rd)
+      for item in os.listdir(esc):
+        sub = os.path.join(esc, item)
+        if os.path.isdir(sub):
+          rutas.append(sub)
+  return list(dict.fromkeys(os.path.abspath(r) for r in rutas))
+
+
+candidatos_logo = []
+candidatos_patron = []
+candidatos_collage = []
+candidatos_video = []
+
+for carpeta in obtener_rutas_busqueda():
+  try:
+    archivos = os.listdir(carpeta)
+  except OSError:
+    continue
+
+  for archivo in archivos:
+    ruta_completa = os.path.join(carpeta, archivo)
+    if not os.path.isfile(ruta_completa):
+      continue
+
+    nombre_norm = normalizar_texto(archivo)
+    tiene_extension = nombre_norm.endswith(EXTENSIONES_IMAGEN)
+
+    # Video pequeño de la imagen principal (se busca en las mismas carpetas)
+    if nombre_norm.endswith(EXTENSIONES_VIDEO):
+      prioridad = (
+          0
+          if any(k in nombre_norm for k in ("principal", "playa", "rd", "collage", "hero"))
+          else 1
+      )
+      candidatos_video.append((prioridad, ruta_completa))
+      continue
+
+    if "corazon dominicano tropical" in nombre_norm or nombre_norm.startswith(
+        "logo_corazon"
+    ):
+      if tiene_extension or "." not in nombre_norm:
+        prioridad = 0 if "corazon dominicano tropical" in nombre_norm else 1
+        candidatos_logo.append((prioridad, ruta_completa))
+
+    elif (
+        "fondo_rd_muchas_repetible" in nombre_norm
+        or "repetible" in nombre_norm
+        or "fondo_rd" in nombre_norm
+        or "patron" in nombre_norm
+        or "banderas" in nombre_norm
+    ):
+      if tiene_extension or "." not in nombre_norm:
+        prioridad = (
+            0
+            if "fondo_rd_muchas_repetible" in nombre_norm
+            or "repetible" in nombre_norm
+            else 1
+        )
+        candidatos_patron.append((prioridad, ruta_completa))
+
+    elif (
+        "playa_rd" in nombre_norm
+        or "playas" in nombre_norm
+        or "playa" in nombre_norm
+        or "collage" in nombre_norm
+        or "turistico" in nombre_norm
+        or "republica" in nombre_norm
+    ):
+      prioridad = 0 if "playa_rd" in nombre_norm else 1
+      candidatos_collage.append((prioridad, ruta_completa))
+
+if candidatos_logo:
+  candidatos_logo.sort(key=lambda x: x[0])
+  logo_src = cargar_imagen_base64(candidatos_logo[0][1])
+
+if candidatos_patron:
+  candidatos_patron.sort(key=lambda x: x[0])
+  patron_src = cargar_imagen_base64(candidatos_patron[0][1])
+
+if candidatos_collage:
+  candidatos_collage.sort(key=lambda x: x[0])
+  collage_src = cargar_imagen_base64(candidatos_collage[0][1])
+
+VIDEO_RUTA = ""
+VIDEO_MIME = "video/mp4"
+if candidatos_video:
+  candidatos_video.sort(key=lambda x: x[0])
+  VIDEO_RUTA = candidatos_video[0][1]
+  VIDEO_MIME = TIPOS_VIDEO.get(os.path.splitext(VIDEO_RUTA)[1].lower(), "video/mp4")
+  print(f"Video de la imagen principal: {VIDEO_RUTA}", flush=True)
+
+# Video de la imagen principal: sin sonido y en bucle (si no hay video, se muestra la imagen)
+VIDEO_HERO_HTML = (
+    '<video class="video-hero-principal" autoplay muted loop playsinline preload="auto" '
+    'disablepictureinpicture aria-label="Video de las playas de República Dominicana" '
+    'src="/video-principal"></video>'
+    if VIDEO_RUTA
+    else ""
+)
+
+
+# =====================================================================
+# 🔐 DATOS DEL ADMINISTRADOR (viven fuera del código, solo en el servidor)
+#   Archivo "datos_administrador.json" junto a app.py. No se sirve por la web
+#   y no se sube a GitHub. La variable FAFI_ADMIN_PASSWORD, si existe, manda
+#   sobre la contraseña del archivo (útil en Render).
+# =====================================================================
+ARCHIVO_DATOS_ADMIN = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "datos_administrador.json"
+)
+
+
+def cargar_datos_admin():
+  datos = {}
+  try:
+    with open(ARCHIVO_DATOS_ADMIN, encoding="utf-8") as archivo:
+      leido = json.load(archivo)
+      if isinstance(leido, dict):
+        datos = leido
+  except FileNotFoundError:
+    pass
+  except (OSError, ValueError):
+    print("AVISO: no se pudo leer datos_administrador.json (revisa que sea un JSON válido).", flush=True)
+
+  clave_entorno = os.environ.get("FAFI_ADMIN_PASSWORD", "").strip()
+  return {
+      "usuario": str(datos.get("usuario") or "fafi_admin").strip(),
+      "password": clave_entorno or str(datos.get("password") or "").strip(),
+      "comunidad": str(datos.get("comunidad") or "Administración Central CORAZÓN RD").strip(),
+      "email": str(datos.get("email") or "").strip(),
+  }
+
+
+DATOS_ADMIN = cargar_datos_admin()
+CLAVE_ADMIN = DATOS_ADMIN["password"]
+USUARIO_ADMIN = DATOS_ADMIN["usuario"]
+
+# =====================================================================
+# 🧩 CONFIGURACIÓN Y LOS 6 BOTONES DEL MENÚ EN UN SOLO LUGAR
+# =====================================================================
+CONFIG_PAGINA = {
+    "nombre_empresa": "CORAZÓN RD",
+    "slogan_principal": "CORAZÓN RD",
+    "descripcion_hero": (
+        "Un espacio de coordinación ciudadana donde el pueblo hace valer su"
+        " fuerza con hechos."
+    ),
+    "admin_defecto": {
+        "usuario": USUARIO_ADMIN,
+        "comunidad": DATOS_ADMIN["comunidad"],
+        "rol": "admin",
+    },
+    "ideales_bloque": {
+        "badge": "EL PUEBLO TIENE EL PODER",
+        "titulo": (
+            "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ NO EN LAS PROMESAS"
+            " DEL GOBIERNO"
+        ),
+        "pilares": [
+            {
+                "numero": "01",
+                "titulo": "SIN DEPENDER DE NADIE",
+                "texto": (
+                    "El poder real no está en un cargo público; nace cuando la"
+                    " gente deja de esperar salvadores y se organiza."
+                ),
+            },
+            {
+                "numero": "02",
+                "titulo": "GRUPO COORDINADO",
+                "texto": (
+                    "Un grupo lo suficientemente grande, unido y con rumbo claro"
+                    " tiene peso real para exigir y mover soluciones."
+                ),
+            },
+            {
+                "numero": "03",
+                "titulo": "CERO PROMESAS FALSAS",
+                "texto": (
+                    "No creemos en discursos vacíos: coordinamos acción ciudadana"
+                    " para que los compromisos se cumplan de verdad."
+                ),
+            },
+        ],
+    },
+    "quienes_somos_bloque": {
+        "badge": "PATRIOTAS POR EL FUTURO",
+        "titulo": "QUIÉNES SOMOS",
+        "cita": (
+            "“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE"
+            " CREEN QUE TIENEN”"
+        ),
+        "descripcion": (
+            "Somos un grupo de patriotas que busca que el país tenga un mejor"
+            " futuro para todos los dominicanos de hoy y el futuro que viene."
+            " Todas las comunidades unidas —desde las juntas de vecinos hasta el"
+            " que vende coco y limpia botas— tienen el poder para protestar por"
+            " lo más mínimo sin que el gobierno haga lo que le plazca."
+        ),
+        "pilares_comunidad": [
+            {
+                "etiqueta": "BARRIO Y COMUNIDAD",
+                "titulo": "JUNTAS DE VECINOS UNIDAS",
+                "texto": (
+                    "Cada calle, sector y comunidad organizada es el primer"
+                    " frente para defender lo justo."
+                ),
+            },
+            {
+                "etiqueta": "TRABAJO DIGNO DE CALLE",
+                "titulo": "DEL QUE VENDE COCO AL LIMPIABOTAS",
+                "texto": (
+                    "La gente trabajadora de todos los días tiene voz, peso y"
+                    " derecho a exigir respeto."
+                ),
+            },
+            {
+                "etiqueta": "FIRMEZA CIUDADANA",
+                "titulo": "PROTESTA POR LO MÍNIMO",
+                "texto": (
+                    "No normalizamos abusos ni caprichos: alzamos la voz unidos"
+                    " para que no se haga lo que plazca."
+                ),
+            },
+        ],
+    },
+    "blog_config": {
+        "titulo_menu": "Blog",
+        "titulo_seccion": "BLOG Y EVENTOS",
+        "descripcion": (
+            "Publicaciones comunitarias administradas por el equipo. Todos los"
+            " usuarios pueden reaccionar a las publicaciones; para comentar o"
+            " enviar mensajes a los administradores, inicia sesión o crea tu"
+            " usuario."
+        ),
+        "noticias_iniciales": [
+            {
+                "id": "noticia-1",
+                "titulo": (
+                    "Juntas de vecinos se coordinan para exigir respuesta en sus"
+                    " sectores"
+                ),
+                "categoria": "Comunidad",
+                "autor": "fafi_admin",
+                "fecha": "Hoy",
+                "imagen": "https://picsum.photos/id/1018/600/350",
+                "contenido": (
+                    "Vecinos y trabajadores de distintos puntos coinciden en que"
+                    " organizarse por barrio y mantener comunicación constante"
+                    " permite defender lo más básico sin esperar promesas"
+                    " vacías."
+                ),
+                "comentarios": [{
+                    "autor": "Juan Pérez",
+                    "texto": (
+                        "Cuando los barrios se ponen de acuerdo de verdad, la voz"
+                        " pesa más."
+                    ),
+                }],
+            },
+            {
+                "id": "noticia-2",
+                "titulo": (
+                    "El valor del trabajo diario y la participación de toda la"
+                    " gente"
+                ),
+                "categoria": "Voz del Pueblo",
+                "autor": "fafi_admin",
+                "fecha": "Ayer",
+                "imagen": "https://picsum.photos/id/1015/600/350",
+                "contenido": (
+                    "Desde el que vende coco y el que limpia botas hasta"
+                    " comerciantes y familias: cada persona que trabaja y"
+                    " aporta tiene derecho a alzar la voz y exigir respeto."
+                ),
+                "comentarios": [],
+            },
+        ],
+    },
+    "mensajes_admin_config": {
+        "titulo_menu": "Mensajes Admin",
+        "titulo_seccion": "MENSAJES A LOS ADMINISTRADORES",
+        "descripcion": (
+            "Si tienes cuenta registrada y hay algún evento importante,"
+            " asamblea comunitaria, protesta o situación urgente en tu sector,"
+            " envíale el detalle a los administradores."
+        ),
+    },
+    "donaciones": {
+        "titulo_menu": "Donaciones",
+        "titulo_seccion": "DONACIONES",
+        "descripcion": (
+            "Con un peso dominicano puedes apoyar a que mañana seamos un mejor"
+            " país, este dinero es usado únicamente con el fin de ayudar a los"
+            " eventos y protestas futuras en cualquier parte del país."
+        ),
+        "texto_boton": "QUIERO DONAR",
+        "cuentas": [
+            {
+                "nombre": "PayPal",
+                "etiqueta": "Cuenta / Enlace PayPal",
+                "dato": "paypal.me/corazonrd",
+            },
+            {
+                "nombre": "Banreservas",
+                "etiqueta": "Cuenta de Ahorros Banreservas",
+                "dato": "960-000000-1 (Corazón RD)",
+            },
+            {
+                "nombre": "Popular",
+                "etiqueta": "Cuenta Banco Popular",
+                "dato": "800-000000-2 (Corazón RD)",
+            },
+            {
+                "nombre": "BHD",
+                "etiqueta": "Cuenta Banco BHD",
+                "dato": "700-000000-3 (Corazón RD)",
+            },
+        ],
+        "mensaje_motivador": (
+            "Un peso suma cuando el pueblo camina junto: hoy es una semilla de"
+            " dignidad, mañana es la fuerza que despierta a un país entero."
+        ),
+    },
+    "logo_url": logo_src,
+    "patron_url": patron_src,
+    "collage_url": collage_src if collage_src else "playa_rd.png",
+    "redes_sociales": {
+        "facebook": "https://www.facebook.com/profile.php?id=61596766414160",
+        "instagram": "https://www.instagram.com/fafirojo12/",
+        "youtube": "https://www.youtube.com/@corazon-rd",
+        "tiktok": "https://www.tiktok.com/@corazonrd",
+    },
+    "secciones": [
+        {
+            "id": "ideales",
+            "titulo_menu": "Ideales",
+            "titulo_seccion": "IDEALES",
+            "subtitulo": "LO QUE DEFENDEMOS EN PALABRAS CLARAS",
+            "descripcion": "",
+            "proyectos": [],
+        },
+        {
+            "id": "protesta",
+            "titulo_menu": "Protesta",
+            "titulo_seccion": "PROTESTA",
+            "subtitulo": "ACCIÓN CIUDADANA ORGANIZADA",
+            "descripcion": (
+                "Expresión visual, denuncia y movilización coordinada para que"
+                " las demandas del pueblo no se ignoren y cada compromiso se"
+                " haga cumplir con hechos. Todos los usuarios pueden reaccionar a"
+                " cada publicación."
+            ),
+            "proyectos": [
+                {
+                    "id": "protesta-1",
+                    "titulo": "Voz Coordinada",
+                    "categoria": "Acción Ciudadana",
+                    "imagen": "https://picsum.photos/id/1025/600/400",
+                },
+                {
+                    "id": "protesta-2",
+                    "titulo": "Que Se Cumpla",
+                    "categoria": "Fiscalización",
+                    "imagen": "https://picsum.photos/id/1024/600/400",
+                },
+            ],
+        },
+        {
+            "id": "quienes-somos",
+            "titulo_menu": "Quiénes Somos",
+            "titulo_seccion": "QUIÉNES SOMOS",
+            "subtitulo": "PATRIOTAS POR UN MEJOR FUTURO",
+            "descripcion": "",
+            "proyectos": [],
+        },
+    ],
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    const cfg = window.CORAZON_RD_CONFIG || window.CORAZON_RD_DATOS || {};
-    const ADMIN_DEFECTO = cfg.adminDefecto || {};
-    const NOTICIAS_DEFECTO = Array.isArray(cfg.noticiasDefecto) ? cfg.noticiasDefecto : [];
-    const PROTESTAS_DEFECTO = Array.isArray(cfg.protestasDefecto) ? cfg.protestasDefecto : [];
-    const MENU_6_IDS = Array.isArray(cfg.menu6Ids) ? cfg.menu6Ids : [];
+MENU_6_BOTONES = [
+    {"id": "ideales", "titulo_menu": "Ideales"},
+    {"id": "protesta", "titulo_menu": "Protesta"},
+    {"id": "quienes-somos", "titulo_menu": "Quiénes Somos"},
+    {"id": "blog", "titulo_menu": CONFIG_PAGINA["blog_config"]["titulo_menu"]},
+    {
+        "id": "mensajes-admin",
+        "titulo_menu": CONFIG_PAGINA["mensajes_admin_config"]["titulo_menu"],
+    },
+    {
+        "id": "donaciones",
+        "titulo_menu": CONFIG_PAGINA["donaciones"]["titulo_menu"],
+    },
+]
 
-    if (cfg.patronUrl) {
-        document.body.style.setProperty("--patron-url", `url("${cfg.patronUrl}")`);
-    }
 
-    // -----------------------------------------------------------------
-    // CONTROLADOR UNIFICADO DE LOS 6 BOTONES DEL MENÚ (COMO 1 SOLO)
-    // -----------------------------------------------------------------
-    const menu6Contenedor = document.getElementById("menu-principal-6");
-    const navLinks = menu6Contenedor ? Array.from(menu6Contenedor.querySelectorAll("a[data-menu-id]")) : [];
-    const seccionesMenu6 = MENU_6_IDS.map(id => document.getElementById(id)).filter(Boolean);
+def render_seccion_boton(boton_id):
+  if boton_id == "ideales":
+    ib = CONFIG_PAGINA["ideales_bloque"]
+    pilares_html = "".join([
+        f"""
+            <div class="pilar-card">
+                <span class="pilar-num">{item['numero']}</span>
+                <h3>{item['titulo']}</h3>
+                <p>{item['texto']}</p>
+            </div>
+            """
+        for item in ib["pilares"]
+    ])
+    return f"""
+        <section id="ideales" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box ideales-box">
+                    <span class="hero-badge">{ib['badge']}</span>
+                    <h2 class="ideales-main-title">{ib['titulo']}</h2>
 
-    function activarBotonMenuUnificado(seccionId, desplazar) {
-        if (!seccionId || !MENU_6_IDS.includes(seccionId)) return;
-        navLinks.forEach(link => {
-            link.classList.toggle("active", link.getAttribute("data-menu-id") === seccionId);
-        });
-        if (desplazar) {
-            const target = document.getElementById(seccionId);
-            if (target) {
-                target.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-        }
-    }
-
-    if (menu6Contenedor) {
-        menu6Contenedor.addEventListener("click", (e) => {
-            const link = e.target.closest("a[data-menu-id]");
-            if (!link) return;
-            e.preventDefault();
-            activarBotonMenuUnificado(link.getAttribute("data-menu-id"), true);
-        });
-    }
-
-    window.addEventListener("scroll", () => {
-        let current = "";
-        seccionesMenu6.forEach(section => {
-            if (window.pageYOffset >= (section.offsetTop - 200)) {
-                current = section.getAttribute("id");
-            }
-        });
-        if (current) {
-            activarBotonMenuUnificado(current, false);
-        }
-    });
-
-    // -----------------------------------------------------------------
-    // SESIÓN Y MODALES
-    // -----------------------------------------------------------------
-    const modalLogin = document.getElementById("modal-login");
-    const modalCrear = document.getElementById("modal-crear-usuario");
-    const btnTopLogin = document.getElementById("btn-top-login");
-    const btnTopCrear = document.getElementById("btn-top-crear");
-    const btnTopCerrar = document.getElementById("btn-top-cerrar");
-    const badgeUsuarioActivo = document.getElementById("badge-usuario-activo");
-    const btnBlogLogin = document.getElementById("btn-blog-login");
-    const btnBlogCrear = document.getElementById("btn-blog-crear");
-    const msgRegistro = document.getElementById("msg-registro");
-    const msgLogin = document.getElementById("msg-login");
-
-    function abrirModal(modal) {
-        if (!modal) return;
-        if (msgLogin) msgLogin.textContent = "";
-        if (msgRegistro) msgRegistro.textContent = "";
-        modal.classList.add("abierto");
-    }
-
-    function cerrarModales() {
-        if (modalLogin) modalLogin.classList.remove("abierto");
-        if (modalCrear) modalCrear.classList.remove("abierto");
-    }
-
-    function irAPaginaPrincipal() {
-        cerrarModales();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        if (window.location.hash !== "#inicio") {
-            window.location.hash = "#inicio";
-        }
-    }
-
-    if (btnTopLogin) btnTopLogin.addEventListener("click", () => abrirModal(modalLogin));
-    if (btnTopCrear) btnTopCrear.addEventListener("click", () => abrirModal(modalCrear));
-    if (btnBlogLogin) btnBlogLogin.addEventListener("click", () => abrirModal(modalLogin));
-    if (btnBlogCrear) btnBlogCrear.addEventListener("click", () => abrirModal(modalCrear));
-
-    document.querySelectorAll("[data-cerrar-modal]").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const objetivo = document.getElementById(btn.getAttribute("data-cerrar-modal"));
-            if (objetivo) objetivo.classList.remove("abierto");
-        });
-    });
-
-    [modalLogin, modalCrear].forEach(modal => {
-        if (!modal) return;
-        modal.addEventListener("click", (e) => {
-            if (e.target === modal) modal.classList.remove("abierto");
-        });
-    });
-
-    const CLAVE_USUARIOS = "corazon_rd_usuarios_v2";
-    const CLAVE_SESION = "corazon_rd_sesion_activa";
-    const CLAVE_NOTICIAS = "corazon_rd_noticias_v2";
-    const CLAVE_MENSAJES_ADMIN = "corazon_rd_mensajes_admin_v2";
-    const CLAVE_REACCIONES = "corazon_rd_reacciones_v4";
-
-    function obtenerUsuarios() {
-        let lista = [];
-        try {
-            lista = JSON.parse(localStorage.getItem(CLAVE_USUARIOS)) || [];
-        } catch {
-            lista = [];
-        }
-        if (ADMIN_DEFECTO.usuario) {
-            const tieneAdmin = lista.some(u => u.usuario && u.usuario.toLowerCase() === ADMIN_DEFECTO.usuario.toLowerCase());
-            if (!tieneAdmin) {
-                lista.unshift(ADMIN_DEFECTO);
-                localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(lista));
-            }
-        }
-        return lista;
-    }
-
-    function guardarUsuarios(lista) {
-        localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(lista));
-    }
-
-    function obtenerSesion() {
-        return localStorage.getItem(CLAVE_SESION) || "";
-    }
-
-    function guardarSesion(usuario) {
-        if (usuario) {
-            localStorage.setItem(CLAVE_SESION, usuario);
-        } else {
-            localStorage.removeItem(CLAVE_SESION);
-        }
-    }
-
-    function esUsuarioAdmin() {
-        const actual = obtenerSesion().toLowerCase();
-        if (!actual) return false;
-        if (ADMIN_DEFECTO.usuario && actual === ADMIN_DEFECTO.usuario.toLowerCase()) return true;
-        const u = obtenerUsuarios().find(item => item.usuario.toLowerCase() === actual);
-        return Boolean(u && u.rol === "admin");
-    }
-
-    obtenerUsuarios();
-
-    function obtenerNoticias() {
-        try {
-            const guardadas = JSON.parse(localStorage.getItem(CLAVE_NOTICIAS));
-            if (Array.isArray(guardadas) && guardadas.length > 0) return guardadas;
-        } catch {}
-        localStorage.setItem(CLAVE_NOTICIAS, JSON.stringify(NOTICIAS_DEFECTO));
-        return NOTICIAS_DEFECTO.slice();
-    }
-
-    function guardarNoticias(lista) {
-        localStorage.setItem(CLAVE_NOTICIAS, JSON.stringify(lista));
-    }
-
-    function obtenerMensajesAdmin() {
-        try {
-            return JSON.parse(localStorage.getItem(CLAVE_MENSAJES_ADMIN)) || [];
-        } catch {
-            return [];
-        }
-    }
-
-    function guardarMensajesAdmin(lista) {
-        localStorage.setItem(CLAVE_MENSAJES_ADMIN, JSON.stringify(lista));
-    }
-
-    function obtenerEstadoReacciones() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(CLAVE_REACCIONES));
-            if (parsed && typeof parsed === "object") {
-                return {
-                    conteos: parsed.conteos || {},
-                    elegidos: parsed.elegidos || {},
-                    usuarioActual: parsed.usuarioActual || {}
-                };
-            }
-        } catch {}
-        return { conteos: {}, elegidos: {}, usuarioActual: {} };
-    }
-
-    function guardarEstadoReacciones(estado) {
-        localStorage.setItem(CLAVE_REACCIONES, JSON.stringify(estado));
-    }
-
-    // -----------------------------------------------------------------
-    // REACCIONES CON EMOJIS
-    // -----------------------------------------------------------------
-    let menuReaccionesAbiertoId = null;
-
-    function construirBarraReacciones(itemId, estadoReacciones, mantenerAbiertoId) {
-        const conteosItem = (estadoReacciones.conteos && estadoReacciones.conteos[itemId]) || {};
-        const elegidosItem = Array.isArray(estadoReacciones.elegidos && estadoReacciones.elegidos[itemId])
-            ? estadoReacciones.elegidos[itemId]
-            : [];
-        const reaccionActivaUsuario = (estadoReacciones.usuarioActual && estadoReacciones.usuarioActual[itemId]) || "";
-        const estaAbierto = mantenerAbiertoId === itemId ? "abierto" : "";
-        const idsVisibles = elegidosItem.length > 0 ? elegidosItem : ["like"];
-
-        const botonesVisiblesHtml = idsVisibles.map(idEmoji => {
-            const info = obtenerDatosReaccion(idEmoji);
-            const cantidad = conteosItem[idEmoji] || 0;
-            const esActiva = reaccionActivaUsuario === idEmoji ? "activa" : "";
-            return `
-                <button type="button"
-                    class="btn-reaccion-principal ${esActiva}"
-                    data-principal-item-id="${escaparHtml(itemId)}"
-                    data-reaccion-id="${escaparHtml(idEmoji)}"
-                    title="${escaparHtml(info.nombre)}"
-                    aria-label="${escaparHtml(info.nombre)}">
-                    <span class="emoji-principal">${info.emoji}</span>
-                    <span class="cantidad-principal">${cantidad}</span>
-                </button>
-            `;
-        }).join("");
-
-        const opcionesHtml = REACCIONES_DESPLEGABLES.map(r => {
-            const cantidad = conteosItem[r.id] || 0;
-            const claseActiva = reaccionActivaUsuario === r.id ? "activa" : "";
-            return `
-                <button type="button"
-                    class="btn-reaccion-opcion ${claseActiva}"
-                    data-item-id="${escaparHtml(itemId)}"
-                    data-reaccion-id="${escaparHtml(r.id)}"
-                    title="${escaparHtml(r.nombre)}"
-                    aria-label="${escaparHtml(r.nombre)}">
-                    <span class="reaccion-emoji">${r.emoji}</span>
-                    <span class="reaccion-contador">${cantidad}</span>
-                </button>
-            `;
-        }).join("");
-
-        return `
-            <div class="reacciones-bloque ${estaAbierto}" data-reaccion-wrapper="${escaparHtml(itemId)}">
-                <div class="reacciones-fila-principal">
-                    ${botonesVisiblesHtml}
-                    <button type="button"
-                        class="btn-abrir-emojis"
-                        data-toggle-emojis="${escaparHtml(itemId)}"
-                        title="Elegir otro emoji">+</button>
-                </div>
-                <div class="reacciones-desplegable" role="group" aria-label="Elegir reacción">
-                    ${opcionesHtml}
+                    <div class="pilares-grid">
+                        {pilares_html}
+                    </div>
                 </div>
             </div>
-        `;
-    }
+        </section>
+        """
 
-    function seleccionarReaccion(itemId, reaccionId) {
-        const estado = obtenerEstadoReacciones();
-        if (!estado.conteos[itemId]) estado.conteos[itemId] = {};
-        if (!Array.isArray(estado.elegidos[itemId])) estado.elegidos[itemId] = [];
-
-        const prevReaccion = estado.usuarioActual[itemId] || "";
-        if (prevReaccion === reaccionId) {
-            estado.conteos[itemId][reaccionId] = Math.max(0, (estado.conteos[itemId][reaccionId] || 0) - 1);
-            delete estado.usuarioActual[itemId];
-        } else {
-            if (prevReaccion) {
-                estado.conteos[itemId][prevReaccion] = Math.max(0, (estado.conteos[itemId][prevReaccion] || 0) - 1);
-            }
-            estado.conteos[itemId][reaccionId] = (estado.conteos[itemId][reaccionId] || 0) + 1;
-            estado.usuarioActual[itemId] = reaccionId;
-            if (!estado.elegidos[itemId].includes(reaccionId)) {
-                estado.elegidos[itemId].push(reaccionId);
-            }
-        }
-
-        guardarEstadoReacciones(estado);
-        renderizarTodo(menuReaccionesAbiertoId);
-
-        const wrapper = document.querySelector(`[data-reaccion-wrapper="${itemId}"]`);
-        if (wrapper) {
-            const btnEmoji = wrapper.querySelector(`.btn-reaccion-principal[data-reaccion-id="${reaccionId}"] .emoji-principal`);
-            if (btnEmoji) {
-                btnEmoji.classList.remove("emoji-animado-click");
-                void btnEmoji.offsetWidth;
-                btnEmoji.classList.add("emoji-animado-click");
-            }
-        }
-    }
-
-    function alternarDesplegable(itemId) {
-        if (!itemId) return;
-        menuReaccionesAbiertoId = (menuReaccionesAbiertoId === itemId) ? null : itemId;
-        renderizarTodo(menuReaccionesAbiertoId);
-    }
-
-    document.addEventListener("click", (e) => {
-        const btnToggle = e.target.closest(".btn-abrir-emojis");
-        if (btnToggle) {
-            e.preventDefault();
-            e.stopPropagation();
-            alternarDesplegable(btnToggle.getAttribute("data-toggle-emojis"));
-            return;
-        }
-
-        const btnOpcion = e.target.closest(".btn-reaccion-opcion");
-        if (btnOpcion) {
-            e.preventDefault();
-            e.stopPropagation();
-            const itemId = btnOpcion.getAttribute("data-item-id");
-            const reaccionId = btnOpcion.getAttribute("data-reaccion-id");
-            if (itemId && reaccionId) {
-                menuReaccionesAbiertoId = itemId;
-                seleccionarReaccion(itemId, reaccionId);
-            }
-            return;
-        }
-
-        const btnPrincipal = e.target.closest(".btn-reaccion-principal");
-        if (btnPrincipal) {
-            e.preventDefault();
-            e.stopPropagation();
-            const itemId = btnPrincipal.getAttribute("data-principal-item-id");
-            const reaccionId = btnPrincipal.getAttribute("data-reaccion-id");
-            if (itemId && reaccionId) {
-                menuReaccionesAbiertoId = itemId;
-                seleccionarReaccion(itemId, reaccionId);
-            }
-            return;
-        }
-
-        if (!e.target.closest(".reacciones-bloque") && menuReaccionesAbiertoId !== null) {
-            menuReaccionesAbiertoId = null;
-            document.querySelectorAll(".reacciones-bloque.abierto").forEach(w => w.classList.remove("abierto"));
-        }
-    });
-
-    // -----------------------------------------------------------------
-    // RENDERIZADO DE PROTESTAS, BLOG Y MENSAJES ADMIN
-    // -----------------------------------------------------------------
-    const textoEstadoSesion = document.getElementById("texto-estado-sesion");
-    const panelAdminBlog = document.getElementById("panel-admin-blog");
-    const contenedorProtestas = document.getElementById("protesta-contenedor");
-    const contenedorNoticias = document.getElementById("noticias-contenedor");
-    const inputRemitenteAdmin = document.getElementById("admin-remitente");
-    const inputTipoAdmin = document.getElementById("admin-tipo-evento");
-    const inputSectorAdmin = document.getElementById("admin-sector");
-    const inputAsuntoAdmin = document.getElementById("admin-asunto");
-    const inputDetalleAdmin = document.getElementById("admin-detalle");
-    const btnEnviarAdmin = document.getElementById("btn-enviar-admin");
-    const btnSubirAdminImg = document.getElementById("btn-subir-admin-img");
-    const avisoBloqueoAdmin = document.getElementById("aviso-bloqueo-admin");
-    const msgAdminFeedback = document.getElementById("msg-admin-feedback");
-    let mensajeOrigenId = "";
-    let ultimaPublicacionId = "";
-    let ultimaPublicacionTitulo = "";
-
-    function renderizarProtestas(mantenerAbiertoId) {
-        if (!contenedorProtestas) return;
-        const estadoReacciones = obtenerEstadoReacciones();
-
-        contenedorProtestas.innerHTML = PROTESTAS_DEFECTO.map((p, idx) => {
-            const protestId = p.id || ("protesta-" + (idx + 1));
-            return `
-                <div class="card">
-                    <img src="${escaparHtml(p.imagen)}" alt="${escaparHtml(p.titulo)}">
-                    <div class="card-body">
-                        <span>${escaparHtml(p.categoria)}</span>
-                        <h3>${escaparHtml(p.titulo)}</h3>
-                        ${construirBarraReacciones(protestId, estadoReacciones, mantenerAbiertoId)}
+  if boton_id == "protesta":
+    sec = next(
+        (s for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"), {}
+    )
+    desc_html = (
+        f"<p>{sec['descripcion']}</p>" if sec.get("descripcion") else ""
+    )
+    return f"""
+        <section id="protesta" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box">
+                    <div class="section-header">
+                        <h2>{sec.get('titulo_seccion', 'PROTESTA')}</h2>
+                        {desc_html}
                     </div>
-                </div>
-            `;
-        }).join("");
-    }
+                    <div id="barra-admin-protesta" class="admin-protesta-barra">
+                        <button type="button" id="btn-abrir-form-protesta" class="btn btn-donar" aria-expanded="false">+ Subir protesta o mensaje</button>
 
-    function renderizarNoticias(mantenerAbiertoId) {
-        const usuarioActual = obtenerSesion();
-        const adminActivo = esUsuarioAdmin();
-        const noticias = obtenerNoticias();
-        const estadoReacciones = obtenerEstadoReacciones();
+                        <div id="panel-admin-protesta" class="admin-panel-box admin-protesta-panel">
+                            <h3>Panel de Administración — Subir protesta</h3>
+                            <form id="form-publicar-protesta">
+                                <div class="acceso-fila-dos">
+                                    <div class="campo-grupo">
+                                        <label for="prot-titulo">Título de la protesta</label>
+                                        <input type="text" id="prot-titulo" required maxlength="120" placeholder="Ej. Marcha por el agua potable">
+                                    </div>
+                                    <div class="campo-grupo">
+                                        <label for="prot-categoria">Categoría</label>
+                                        <input type="text" id="prot-categoria" required maxlength="60" placeholder="Ej. Acción Ciudadana">
+                                    </div>
+                                </div>
 
-        if (!contenedorNoticias) return;
+                                <div class="campo-grupo">
+                                    <label for="prot-mensaje">Mensaje a publicar</label>
+                                    <textarea id="prot-mensaje" required maxlength="3000" placeholder="Escribe aquí el mensaje de la protesta..."></textarea>
+                                </div>
 
-        if (ultimaPublicacionId && !noticias.some(item => String(item.id) === String(ultimaPublicacionId))) {
-            ultimaPublicacionId = "";
-            ultimaPublicacionTitulo = "";
-            ocultarBotonPublicada();
-        }
+                                <div class="campo-grupo">
+                                    <label for="prot-imagen">Imagen (opcional: súbela desde tu PC/teléfono o pega un enlace)</label>
+                                    <div class="subir-imagen-fila">
+                                        <button type="button" id="btn-prot-subir-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
+                                        <button type="button" id="btn-prot-quitar" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
+                                        <input type="file" id="input-prot-archivo" accept="image/*" style="display:none;">
+                                        <span id="nombre-prot-archivo" style="font-size:0.84rem; color:#ffd166;"></span>
+                                    </div>
+                                    <input type="text" id="prot-imagen" placeholder="O pega aquí un enlace de imagen (https://...)">
+                                    <img id="vista-previa-prot" class="vista-previa-img" alt="Vista previa de la imagen">
+                                </div>
 
-        contenedorNoticias.innerHTML = noticias.map(n => {
-            const comentariosHtml = (n.comentarios || []).map(c => `
-                <div class="comentario-item">
-                    <strong>@${escaparHtml(c.autor)}</strong>
-                    <p>${escaparHtml(c.texto)}</p>
-                </div>
-            `).join("");
-
-            const formularioComentarioHtml = usuarioActual
-                ? `
-                    <form class="comentario-form" data-noticia-id="${escaparHtml(n.id)}">
-                        <input type="text" class="input-comentario" required placeholder="Escribe un comentario como @${escaparHtml(usuarioActual)}...">
-                        <button type="submit" class="btn btn-donar btn-pequeno">Comentar</button>
-                    </form>
-                `
-                : `
-                    <p class="aviso-solo-lectura">
-                        Inicia sesión o crea tu usuario para comentar. Sin registro solo puedes ver y reaccionar.
-                    </p>
-                `;
-
-            const imgHtml = n.imagen ? `<img src="${escaparHtml(n.imagen)}" alt="${escaparHtml(n.titulo)}">` : "";
-            const btnBorrarNoticia = adminActivo
-                ? `<button type="button" class="btn btn-pequeno btn-borrar-noticia" data-borrar-noticia="${escaparHtml(n.id)}" style="margin-bottom:12px;">Eliminar publicación</button>`
-                : "";
-
-            return `
-                <article class="noticia-card">
-                    ${imgHtml}
-                    <div class="noticia-cuerpo">
-                        <div class="noticia-meta">${escaparHtml(n.categoria)} • ${escaparHtml(n.autor)} • ${escaparHtml(n.fecha)}</div>
-                        <h3>${escaparHtml(n.titulo)}</h3>
-                        <p class="noticia-texto">${escaparHtml(n.contenido)}</p>
-                        ${btnBorrarNoticia}
-                        <div>${construirBarraReacciones(n.id, estadoReacciones, mantenerAbiertoId)}</div>
-                        <div class="comentarios-area">
-                            <h4>Comentarios (${(n.comentarios || []).length})</h4>
-                            ${comentariosHtml || '<p style="font-size:0.88rem; color:#bbbbbb; margin-bottom:8px;">Aún no hay comentarios.</p>'}
-                            ${formularioComentarioHtml}
+                                <button type="submit" class="btn btn-donar btn-pequeno">Publicar protesta</button>
+                            </form>
+                            <p id="msg-prot-admin" class="mensaje-feedback"></p>
                         </div>
                     </div>
-                </article>
-            `;
-        }).join("");
 
-        document.querySelectorAll(".btn-borrar-noticia").forEach(btn => {
-            btn.addEventListener("click", () => {
-                if (!esUsuarioAdmin()) return;
-                const idBorrar = btn.getAttribute("data-borrar-noticia");
-                guardarNoticias(obtenerNoticias().filter(item => item.id !== idBorrar));
-                renderizarTodo(null);
-            });
-        });
-
-        document.querySelectorAll(".comentario-form").forEach(form => {
-            form.addEventListener("submit", (e) => {
-                e.preventDefault();
-                const sesion = obtenerSesion();
-                if (!sesion) {
-                    abrirModal(modalLogin);
-                    return;
-                }
-                const input = form.querySelector(".input-comentario");
-                const texto = (input.value || "").trim();
-                if (!texto) return;
-
-                const noticiaId = form.getAttribute("data-noticia-id");
-                const lista = obtenerNoticias();
-                const objetivo = lista.find(item => item.id === noticiaId);
-                if (objetivo) {
-                    objetivo.comentarios = objetivo.comentarios || [];
-                    objetivo.comentarios.push({ autor: sesion, texto });
-                    guardarNoticias(lista);
-                    input.value = "";
-                    renderizarTodo(null);
-                }
-            });
-        });
-    }
-
-    function renderizarTodo(mantenerAbiertoId) {
-        const abiertoActual = mantenerAbiertoId !== undefined
-            ? mantenerAbiertoId
-            : menuReaccionesAbiertoId;
-        renderizarProtestas(abiertoActual);
-        renderizarNoticias(abiertoActual);
-    }
-
-    // Subir imagen en Blog
-    const btnSubirImgArchivo = document.getElementById("btn-subir-imagen-archivo");
-    const btnQuitarPubImg = document.getElementById("btn-quitar-pub-img");
-    const inputArchivoImagen = document.getElementById("input-archivo-imagen");
-    const nombreArchivoImagen = document.getElementById("nombre-archivo-imagen");
-    const inputPubImagen = document.getElementById("pub-imagen");
-    const vistaPreviaPubImg = document.getElementById("vista-previa-pub-img");
-    let imagenSubidaDataUrl = "";
-
-    function limpiarImagenPub() {
-        imagenSubidaDataUrl = "";
-        if (inputArchivoImagen) inputArchivoImagen.value = "";
-        if (inputPubImagen) inputPubImagen.value = "";
-        if (nombreArchivoImagen) nombreArchivoImagen.textContent = "";
-        if (btnQuitarPubImg) btnQuitarPubImg.style.display = "none";
-        if (vistaPreviaPubImg) {
-            vistaPreviaPubImg.src = "";
-            vistaPreviaPubImg.classList.remove("visible");
-        }
-    }
-
-    if (btnSubirImgArchivo && inputArchivoImagen) {
-        btnSubirImgArchivo.addEventListener("click", () => inputArchivoImagen.click());
-        inputArchivoImagen.addEventListener("change", () => {
-            const archivo = inputArchivoImagen.files && inputArchivoImagen.files[0];
-            if (!archivo) return;
-            const lector = new FileReader();
-            lector.onload = (ev) => {
-                imagenSubidaDataUrl = ev.target.result || "";
-                if (inputPubImagen) inputPubImagen.value = "";
-                if (nombreArchivoImagen) nombreArchivoImagen.textContent = archivo.name;
-                if (btnQuitarPubImg) btnQuitarPubImg.style.display = "inline-block";
-                if (vistaPreviaPubImg) {
-                    vistaPreviaPubImg.src = imagenSubidaDataUrl;
-                    vistaPreviaPubImg.classList.add("visible");
-                }
-            };
-            lector.readAsDataURL(archivo);
-        });
-    }
-
-    if (btnQuitarPubImg) btnQuitarPubImg.addEventListener("click", limpiarImagenPub);
-
-    if (inputPubImagen) {
-        inputPubImagen.addEventListener("input", () => {
-            const urlVal = inputPubImagen.value.trim();
-            if (urlVal) {
-                imagenSubidaDataUrl = "";
-                if (nombreArchivoImagen) nombreArchivoImagen.textContent = "";
-                if (btnQuitarPubImg) btnQuitarPubImg.style.display = "inline-block";
-                if (vistaPreviaPubImg) {
-                    vistaPreviaPubImg.src = urlVal;
-                    vistaPreviaPubImg.classList.add("visible");
-                }
-            } else if (!imagenSubidaDataUrl) {
-                if (btnQuitarPubImg) btnQuitarPubImg.style.display = "none";
-                if (vistaPreviaPubImg) {
-                    vistaPreviaPubImg.src = "";
-                    vistaPreviaPubImg.classList.remove("visible");
-                }
-            }
-        });
-    }
-
-    const formPublicarNoticia = document.getElementById("form-publicar-noticia");
-    const msgPubAdmin = document.getElementById("msg-pub-admin");
-
-    function obtenerContenedorAccionPublicada() {
-        if (!msgPubAdmin) return null;
-        let cont = document.getElementById("accion-publicada-reciente");
-        if (!cont) {
-            cont = document.createElement("div");
-            cont.id = "accion-publicada-reciente";
-            cont.style.marginTop = "12px";
-            cont.style.display = "flex";
-            cont.style.flexWrap = "wrap";
-            cont.style.alignItems = "center";
-            cont.style.gap = "10px";
-            msgPubAdmin.insertAdjacentElement("afterend", cont);
-        }
-        return cont;
-    }
-
-    function ocultarBotonPublicada() {
-        const cont = document.getElementById("accion-publicada-reciente");
-        if (cont) {
-            cont.innerHTML = "";
-        }
-    }
-
-    function mostrarBotonPublicada(noticiaId, tituloNoticia) {
-        const cont = obtenerContenedorAccionPublicada();
-        if (!cont) return;
-        cont.innerHTML = `
-            <button type="button" id="btn-estado-publicada" class="btn btn-pequeno" data-publicacion-id="${escaparHtml(noticiaId)}">
-                PUBLICADA
-            </button>
-        `;
-        const btnPub = document.getElementById("btn-estado-publicada");
-        if (btnPub) {
-            btnPub.addEventListener("click", () => {
-                if (!esUsuarioAdmin()) {
-                    abrirModal(modalLogin);
-                    return;
-                }
-                const deseaEliminar = window.confirm(
-                    `¿Quieres eliminar la publicación "${tituloNoticia || "sin título"}" del blog?`
-                );
-                if (!deseaEliminar) return;
-
-                const restantes = obtenerNoticias().filter(item => String(item.id) !== String(noticiaId));
-                guardarNoticias(restantes);
-                ultimaPublicacionId = "";
-                ultimaPublicacionTitulo = "";
-                ocultarBotonPublicada();
-                if (msgPubAdmin) {
-                    msgPubAdmin.style.color = "#ffd166";
-                    msgPubAdmin.textContent = "Publicación eliminada del blog.";
-                }
-                renderizarTodo(null);
-            });
-        }
-    }
-
-    if (formPublicarNoticia) {
-        formPublicarNoticia.addEventListener("submit", (e) => {
-            e.preventDefault();
-
-            if (!obtenerSesion()) {
-                if (msgPubAdmin) {
-                    msgPubAdmin.style.color = "#ff7582";
-                    msgPubAdmin.textContent = "Inicia sesión como administrador (fafi_admin) para publicar.";
-                }
-                abrirModal(modalLogin);
-                return;
-            }
-
-            if (!esUsuarioAdmin()) {
-                if (msgPubAdmin) {
-                    msgPubAdmin.style.color = "#ff7582";
-                    msgPubAdmin.textContent = "Solo la cuenta administradora (fafi_admin) puede publicar en el blog.";
-                }
-                return;
-            }
-
-            const campoTitulo = document.getElementById("pub-titulo");
-            const campoCategoria = document.getElementById("pub-categoria");
-            const campoContenido = document.getElementById("pub-contenido");
-
-            const titulo = campoTitulo ? campoTitulo.value.trim() : "";
-            const categoria = campoCategoria ? campoCategoria.value.trim() : "";
-            const urlIngresada = inputPubImagen ? inputPubImagen.value.trim() : "";
-            const imagenFinal = imagenSubidaDataUrl || urlIngresada;
-            const contenido = campoContenido ? campoContenido.value.trim() : "";
-
-            if (!titulo || !categoria || !contenido) {
-                if (msgPubAdmin) {
-                    msgPubAdmin.style.color = "#ff7582";
-                    msgPubAdmin.textContent = "Completa el título, la categoría y el contenido antes de publicar.";
-                }
-                return;
-            }
-
-            const nuevaId = "noticia-" + Date.now();
-            const lista = obtenerNoticias();
-            lista.unshift({
-                id: nuevaId,
-                titulo,
-                categoria,
-                autor: obtenerSesion(),
-                fecha: "Ahora",
-                imagen: imagenFinal,
-                contenido,
-                comentarios: []
-            });
-            guardarNoticias(lista);
-
-            if (mensajeOrigenId) {
-                const restantes = obtenerMensajesAdmin().filter(m => String(m.id) !== String(mensajeOrigenId));
-                guardarMensajesAdmin(restantes);
-                mensajeOrigenId = "";
-                renderizarMensajesAdmin();
-            }
-
-            formPublicarNoticia.reset();
-            if (campoTitulo) campoTitulo.value = "";
-            if (campoCategoria) campoCategoria.value = "";
-            if (campoContenido) campoContenido.value = "";
-            limpiarImagenPub();
-
-            ultimaPublicacionId = nuevaId;
-            ultimaPublicacionTitulo = titulo;
-
-            if (msgPubAdmin) {
-                msgPubAdmin.style.color = "#7dffb3";
-                msgPubAdmin.textContent = "Noticia publicada y campos limpiados.";
-            }
-            mostrarBotonPublicada(nuevaId, titulo);
-            renderizarTodo(null);
-        });
-    }
-
-    // Subir imagen en Mensajes Admin
-    const btnQuitarAdminImg = document.getElementById("btn-quitar-admin-img");
-    const inputArchivoAdminImg = document.getElementById("input-archivo-admin-img");
-    const nombreArchivoAdminImg = document.getElementById("nombre-archivo-admin-img");
-    const vistaPreviaAdminImg = document.getElementById("vista-previa-admin-img");
-    let imagenAdminDataUrl = "";
-
-    function limpiarImagenAdmin() {
-        imagenAdminDataUrl = "";
-        if (inputArchivoAdminImg) inputArchivoAdminImg.value = "";
-        if (nombreArchivoAdminImg) nombreArchivoAdminImg.textContent = "";
-        if (btnQuitarAdminImg) btnQuitarAdminImg.style.display = "none";
-        if (vistaPreviaAdminImg) {
-            vistaPreviaAdminImg.src = "";
-            vistaPreviaAdminImg.classList.remove("visible");
-        }
-    }
-
-    if (btnSubirAdminImg && inputArchivoAdminImg) {
-        btnSubirAdminImg.addEventListener("click", () => {
-            if (!obtenerSesion()) {
-                abrirModal(modalLogin);
-                return;
-            }
-            inputArchivoAdminImg.click();
-        });
-        inputArchivoAdminImg.addEventListener("change", () => {
-            const archivo = inputArchivoAdminImg.files && inputArchivoAdminImg.files[0];
-            if (!archivo) return;
-            const lector = new FileReader();
-            lector.onload = (ev) => {
-                imagenAdminDataUrl = ev.target.result || "";
-                if (nombreArchivoAdminImg) nombreArchivoAdminImg.textContent = archivo.name;
-                if (btnQuitarAdminImg) btnQuitarAdminImg.style.display = "inline-block";
-                if (vistaPreviaAdminImg) {
-                    vistaPreviaAdminImg.src = imagenAdminDataUrl;
-                    vistaPreviaAdminImg.classList.add("visible");
-                }
-            };
-            lector.readAsDataURL(archivo);
-        });
-    }
-
-    if (btnQuitarAdminImg) btnQuitarAdminImg.addEventListener("click", limpiarImagenAdmin);
-
-    const formMensajeAdmin = document.getElementById("form-mensaje-admin");
-    const historialMensajesAdmin = document.getElementById("historial-mensajes-admin");
-
-    function cargarMensajeEnBorradorBlog(mensaje) {
-        if (!esUsuarioAdmin() || !mensaje) return;
-
-        mensajeOrigenId = mensaje.id || "";
-        const inputTitulo = document.getElementById("pub-titulo");
-        const inputCategoria = document.getElementById("pub-categoria");
-        const inputContenido = document.getElementById("pub-contenido");
-
-        if (inputTitulo) inputTitulo.value = mensaje.asunto || "";
-        if (inputCategoria) inputCategoria.value = mensaje.tipoEvento || "Reporte de Barrio";
-
-        const cuerpoBase = mensaje.detalle || "";
-        const notaSector = mensaje.sector ? `\n\nSector / Comunidad: ${mensaje.sector}` : "";
-        if (inputContenido) {
-            inputContenido.value = cuerpoBase.includes(mensaje.sector || "")
-                ? cuerpoBase
-                : `${cuerpoBase}${notaSector}`.trim();
-        }
-
-        limpiarImagenPub();
-        if (mensaje.imagen) {
-            imagenSubidaDataUrl = mensaje.imagen;
-            if (nombreArchivoImagen) nombreArchivoImagen.textContent = "Imagen adjunta del mensaje";
-            if (btnQuitarPubImg) btnQuitarPubImg.style.display = "inline-block";
-            if (vistaPreviaPubImg) {
-                vistaPreviaPubImg.src = mensaje.imagen;
-                vistaPreviaPubImg.classList.add("visible");
-            }
-        }
-
-        if (panelAdminBlog) panelAdminBlog.classList.add("visible");
-        if (msgPubAdmin) {
-            msgPubAdmin.style.color = "#ffd166";
-            msgPubAdmin.textContent = "Borrador cargado desde Mensajes Admin: revisa o corrige el texto y pulsa 'Publicar Noticia'.";
-        }
-
-        const destino = panelAdminBlog || document.getElementById("blog");
-        if (destino) {
-            destino.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-        if (inputTitulo) inputTitulo.focus();
-    }
-
-    function renderizarMensajesAdmin() {
-        if (!historialMensajesAdmin) return;
-        const sesion = obtenerSesion();
-        const adminActivo = esUsuarioAdmin();
-        const mensajes = obtenerMensajesAdmin().filter(
-            m => adminActivo || (sesion && m.remitente.toLowerCase().includes(sesion.toLowerCase()))
-        );
-
-        if (mensajes.length === 0) {
-            historialMensajesAdmin.innerHTML = "";
-            return;
-        }
-
-        historialMensajesAdmin.innerHTML = mensajes.map(m => {
-            const imgAdjunta = m.imagen ? `<img src="${escaparHtml(m.imagen)}" alt="Adjunto de ${escaparHtml(m.asunto)}">` : "";
-            const btnPasarBlog = adminActivo
-                ? `
-                    <div class="admin-msg-acciones">
-                        <button type="button"
-                            class="btn btn-donar btn-pequeno btn-pasar-blog"
-                            data-mensaje-id="${escaparHtml(m.id)}">
-                            Pasar al Blog (corregir)
-                        </button>
-                    </div>
-                `
-                : "";
-
-            return `
-                <div class="admin-msg-item">
-                    <strong>${escaparHtml(m.tipoEvento)} • ${escaparHtml(m.sector)} • De: ${escaparHtml(m.remitente)}</strong>
-                    <h4>${escaparHtml(m.asunto)}</h4>
-                    <p>${escaparHtml(m.detalle)}</p>
-                    ${imgAdjunta}
-                    ${btnPasarBlog}
+                    <div id="protesta-contenedor" class="grid"></div>
                 </div>
-            `;
-        }).join("");
+            </div>
+        </section>
+        """
 
-        if (adminActivo) {
-            const todosLosMensajes = obtenerMensajesAdmin();
-            document.querySelectorAll(".btn-pasar-blog").forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const idMsg = btn.getAttribute("data-mensaje-id");
-                    const encontrado = todosLosMensajes.find(item => String(item.id) === String(idMsg));
-                    cargarMensajeEnBorradorBlog(encontrado);
-                });
-            });
-        }
-    }
+  if boton_id == "quienes-somos":
+    qs = CONFIG_PAGINA["quienes_somos_bloque"]
+    comunidad_html = "".join([
+        f"""
+            <div class="comunidad-card">
+                <span>{item['etiqueta']}</span>
+                <h3>{item['titulo']}</h3>
+                <p>{item['texto']}</p>
+            </div>
+            """
+        for item in qs["pilares_comunidad"]
+    ])
+    return f"""
+        <section id="quienes-somos" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box quienes-somos-box">
+                    <span class="hero-badge">{qs['badge']}</span>
+                    <h2>{qs['titulo']}</h2>
 
-    if (formMensajeAdmin) {
-        formMensajeAdmin.addEventListener("submit", (e) => {
-            e.preventDefault();
-            if (!obtenerSesion()) {
-                abrirModal(modalLogin);
-                return;
-            }
-            const remitente = inputRemitenteAdmin.value.trim();
-            const tipoEvento = inputTipoAdmin.value;
-            const sector = inputSectorAdmin.value.trim();
-            const asunto = inputAsuntoAdmin.value.trim();
-            const detalle = inputDetalleAdmin.value.trim();
-            if (!remitente || !sector || !asunto || !detalle) return;
+                    <blockquote class="manifiesto-cita">
+                        {qs['cita']}
+                    </blockquote>
 
-            const lista = obtenerMensajesAdmin();
-            lista.unshift({
-                id: "msg-admin-" + Date.now(),
-                remitente,
-                tipoEvento,
-                sector,
-                asunto,
-                detalle,
-                imagen: imagenAdminDataUrl
-            });
-            guardarMensajesAdmin(lista);
-            formMensajeAdmin.reset();
-            limpiarImagenAdmin();
-            actualizarEstadoAccesoUI();
-            if (msgAdminFeedback) {
-                msgAdminFeedback.style.color = "#7dffb3";
-                msgAdminFeedback.textContent = "Mensaje enviado a los administradores.";
-            }
-            renderizarMensajesAdmin();
-        });
-    }
+                    <p class="quienes-somos-desc">{qs['descripcion']}</p>
 
-    function actualizarEstadoAccesoUI() {
-        const usuarioActual = obtenerSesion();
-        const adminActivo = esUsuarioAdmin();
+                    <div class="comunidad-grid">
+                        {comunidad_html}
+                    </div>
+                </div>
+            </div>
+        </section>
+        """
 
-        if (usuarioActual) {
-            if (badgeUsuarioActivo) {
-                badgeUsuarioActivo.textContent = adminActivo ? ("@" + usuarioActual + " [ADMIN]") : ("@" + usuarioActual);
-                badgeUsuarioActivo.classList.toggle("es-admin", adminActivo);
-                badgeUsuarioActivo.style.display = "inline-block";
-            }
-            if (btnTopLogin) btnTopLogin.style.display = "none";
-            if (btnTopCrear) btnTopCrear.style.display = "none";
-            if (btnTopCerrar) btnTopCerrar.style.display = "inline-block";
-            if (btnBlogLogin) btnBlogLogin.style.display = "none";
-            if (btnBlogCrear) btnBlogCrear.style.display = "none";
-            if (panelAdminBlog) panelAdminBlog.classList.toggle("visible", adminActivo);
-            if (textoEstadoSesion) {
-                textoEstadoSesion.textContent = adminActivo
-                    ? "Sesión de administrador activa (@" + usuarioActual + "). Puedes publicar noticias, moderar y revisar mensajes."
-                    : "Sesión iniciada como @" + usuarioActual + ". Puedes reaccionar, comentar y enviar mensajes a los administradores.";
-            }
-            if (avisoBloqueoAdmin) avisoBloqueoAdmin.textContent = "";
-            [inputRemitenteAdmin, inputTipoAdmin, inputSectorAdmin, inputAsuntoAdmin, inputDetalleAdmin, btnEnviarAdmin, btnSubirAdminImg].forEach(el => {
-                if (el) el.disabled = false;
-            });
-            if (inputRemitenteAdmin && !inputRemitenteAdmin.value.trim()) {
-                inputRemitenteAdmin.value = "@" + usuarioActual;
-            }
-        } else {
-            if (badgeUsuarioActivo) {
-                badgeUsuarioActivo.textContent = "";
-                badgeUsuarioActivo.classList.remove("es-admin");
-                badgeUsuarioActivo.style.display = "none";
-            }
-            if (btnTopLogin) btnTopLogin.style.display = "inline-block";
-            if (btnTopCrear) btnTopCrear.style.display = "inline-block";
-            if (btnTopCerrar) btnTopCerrar.style.display = "none";
-            if (btnBlogLogin) btnBlogLogin.style.display = "inline-block";
-            if (btnBlogCrear) btnBlogCrear.style.display = "inline-block";
-            if (panelAdminBlog) panelAdminBlog.classList.remove("visible");
-            if (textoEstadoSesion) {
-                textoEstadoSesion.textContent = "Todos los usuarios pueden reaccionar a las publicaciones; inicia sesión o crea tu usuario para comentar o enviar mensajes.";
-            }
-            if (avisoBloqueoAdmin) {
-                avisoBloqueoAdmin.textContent = "Debes iniciar sesión o crear tu usuario para enviar mensajes a los administradores.";
-            }
-            [inputRemitenteAdmin, inputTipoAdmin, inputSectorAdmin, inputAsuntoAdmin, inputDetalleAdmin, btnEnviarAdmin, btnSubirAdminImg].forEach(el => {
-                if (el) el.disabled = true;
-            });
-        }
-        renderizarMensajesAdmin();
-    }
+  if boton_id == "blog":
+    blog = CONFIG_PAGINA["blog_config"]
+    return f"""
+        <section id="blog" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box">
+                    <div class="section-header">
+                        <h2>{blog['titulo_seccion']}</h2>
+                        <p>{blog['descripcion']}</p>
+                    </div>
 
-    // Cédula: solo números, formato 000-0000000-0 (11 dígitos)
-    function soloDigitos(texto) {
-        return String(texto || "").replace(/\D/g, "");
-    }
+                    <div id="estado-sesion-blog" class="estado-sesion-banner">
+                        <p id="texto-estado-sesion">Modo visitante: puedes ver y reaccionar a las publicaciones, pero debes iniciar sesión o crear tu usuario para comentar o enviar mensajes.</p>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button type="button" id="btn-blog-login" class="btn btn-donar btn-pequeno">Iniciar Sesión</button>
+                            <button type="button" id="btn-blog-crear" class="btn btn-pequeno">Crear Usuario</button>
+                        </div>
+                    </div>
 
-    function formatearCedula(digitos) {
-        const d = digitos.slice(0, 11);
-        if (d.length <= 3) return d;
-        if (d.length <= 10) return d.slice(0, 3) + "-" + d.slice(3);
-        return d.slice(0, 3) + "-" + d.slice(3, 10) + "-" + d.slice(10);
-    }
+                    <div id="panel-admin-blog" class="admin-panel-box">
+                        <h3>Panel de Administración (fafi_admin) — Publicar en el Blog</h3>
+                        <form id="form-publicar-noticia">
+                            <div class="acceso-fila-dos">
+                                <div class="campo-grupo">
+                                    <label for="pub-titulo">Título de la publicación</label>
+                                    <input type="text" id="pub-titulo" required placeholder="Título del evento o noticia...">
+                                </div>
+                                <div class="campo-grupo">
+                                    <label for="pub-categoria">Categoría</label>
+                                    <input type="text" id="pub-categoria" required placeholder="Ej. Movilización, Comunidad...">
+                                </div>
+                            </div>
 
-    // Da formato mientras se escribe (si es el usuario admin, escribe letras y no se toca)
-    function activarFormatoCedula(input) {
-        if (!input) return;
-        input.addEventListener("input", () => {
-            if (/^[\d-]*$/.test(input.value)) {
-                input.value = formatearCedula(soloDigitos(input.value));
-            }
-        });
-    }
+                            <div class="campo-grupo">
+                                <label for="pub-imagen">Imagen (sube desde tu PC/teléfono o pega URL)</label>
+                                <div class="subir-imagen-fila">
+                                    <button type="button" id="btn-subir-imagen-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
+                                    <button type="button" id="btn-quitar-pub-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
+                                    <input type="file" id="input-archivo-imagen" accept="image/*" style="display:none;">
+                                    <span id="nombre-archivo-imagen" style="font-size:0.84rem; color:#ffd166;"></span>
+                                </div>
+                                <input type="text" id="pub-imagen" placeholder="O pega aquí un enlace de imagen (opcional)">
+                                <img id="vista-previa-pub-img" class="vista-previa-img" alt="Vista previa de imagen">
+                            </div>
 
-    activarFormatoCedula(document.getElementById("reg-cedula"));
-    activarFormatoCedula(document.getElementById("login-usuario"));
+                            <div class="campo-grupo">
+                                <label for="pub-contenido">Contenido</label>
+                                <textarea id="pub-contenido" required placeholder="Escribe el mensaje o anuncio..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-donar btn-pequeno">Publicar Noticia</button>
+                        </form>
+                        <p id="msg-pub-admin" class="mensaje-feedback"></p>
+                    </div>
 
-    const formRegistro = document.getElementById("form-registro-usuario");
-    if (formRegistro) {
-        formRegistro.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const cedula = soloDigitos(document.getElementById("reg-cedula").value);
-            const nombre = document.getElementById("reg-nombre").value.trim();
-            const usuario = document.getElementById("reg-usuario").value.trim();
-            const comunidad = document.getElementById("reg-comunidad").value.trim();
-            const email = document.getElementById("reg-email").value.trim().toLowerCase();
-            const password = document.getElementById("reg-password").value;
-            const confirmar = document.getElementById("reg-confirmar-password").value;
-            const terminos = document.getElementById("reg-terminos");
+                    <div id="noticias-contenedor" class="noticias-lista"></div>
+                </div>
+            </div>
+        </section>
+        """
 
-            function errorRegistro(texto) {
-                if (msgRegistro) {
-                    msgRegistro.style.color = "#ff7582";
-                    msgRegistro.textContent = texto;
-                }
-            }
+  if boton_id == "mensajes-admin":
+    ma = CONFIG_PAGINA["mensajes_admin_config"]
+    return f"""
+        <section id="mensajes-admin" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box">
+                    <div class="section-header">
+                        <h2>{ma['titulo_seccion']}</h2>
+                        <p>{ma['descripcion']}</p>
+                    </div>
 
-            if (!cedula || !nombre || !usuario || !comunidad || !email || !password || !confirmar) return;
-            if (cedula.length !== 11) {
-                errorRegistro("La cédula debe tener 11 dígitos (000-0000000-0).");
-                return;
-            }
-            if (password !== confirmar) {
-                errorRegistro("Las contraseñas no coinciden.");
-                return;
-            }
-            if (!terminos || !terminos.checked) {
-                errorRegistro("Debes aceptar los términos y políticas de esta página.");
-                return;
-            }
+                    <div class="admin-msg-box">
+                        <p id="aviso-bloqueo-admin" class="aviso-solo-lectura" style="margin-bottom:14px;"></p>
+                        <form id="form-mensaje-admin">
+                            <div class="acceso-fila-dos">
+                                <div class="campo-grupo">
+                                    <label for="admin-remitente">Tu nombre o usuario</label>
+                                    <input type="text" id="admin-remitente" required placeholder="Ej. Juan / @voz_barrio">
+                                </div>
+                                <div class="campo-grupo">
+                                    <label for="admin-tipo-evento">Tipo de evento o aviso</label>
+                                    <select id="admin-tipo-evento">
+                                        <option value="Evento Importante">Evento Importante</option>
+                                        <option value="Asamblea Comunitaria">Asamblea Comunitaria</option>
+                                        <option value="Movilización / Protesta">Movilización / Protesta</option>
+                                        <option value="Reporte de Barrio">Reporte de Barrio</option>
+                                    </select>
+                                </div>
+                            </div>
 
-            const usuarios = obtenerUsuarios();
-            if (usuarios.some(u => u.cedula === cedula)) {
-                errorRegistro("Esa cédula ya está registrada.");
-                return;
-            }
-            if (usuarios.some(u => u.usuario.toLowerCase() === usuario.toLowerCase() || u.email === email)) {
-                errorRegistro("Ese usuario o correo ya está registrado.");
-                return;
-            }
+                            <div class="acceso-fila-dos">
+                                <div class="campo-grupo">
+                                    <label for="admin-sector">Comunidad, junta de vecinos o lugar</label>
+                                    <input type="text" id="admin-sector" required placeholder="Ej. Sector Pueblo Nuevo, Junta de Vecinos...">
+                                </div>
+                                <div class="campo-grupo">
+                                    <label for="admin-asunto">Asunto del evento</label>
+                                    <input type="text" id="admin-asunto" required placeholder="Título o motivo principal...">
+                                </div>
+                            </div>
 
-            usuarios.push({
-                usuario,
-                nombre,
-                cedula,
-                comunidad,
-                email,
-                password,
-                rol: "usuario",
-                terminosAceptados: true
-            });
-            guardarUsuarios(usuarios);
-            guardarSesion(usuario);
-            formRegistro.reset();
-            actualizarEstadoAccesoUI();
-            renderizarTodo(null);
-            irAPaginaPrincipal();
-        });
-    }
+                            <div class="campo-grupo">
+                                <label>Foto o evidencia (opcional — desde PC o teléfono)</label>
+                                <div class="subir-imagen-fila">
+                                    <button type="button" id="btn-subir-admin-img" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
+                                    <button type="button" id="btn-quitar-admin-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
+                                    <input type="file" id="input-archivo-admin-img" accept="image/*" style="display:none;">
+                                    <span id="nombre-archivo-admin-img" style="font-size:0.84rem; color:#ffd166;"></span>
+                                </div>
+                                <img id="vista-previa-admin-img" class="vista-previa-img" alt="Vista previa adjunto para administradores">
+                            </div>
 
-    const formLogin = document.getElementById("form-login-usuario");
-    if (formLogin) {
-        formLogin.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const texto = document.getElementById("login-usuario").value.trim().toLowerCase();
-            const cedula = soloDigitos(texto);
-            const password = document.getElementById("login-password").value;
-            const esCedula = /^[\d-]+$/.test(texto);
+                            <div class="campo-grupo">
+                                <label for="admin-detalle">Detalles del evento (fecha, hora, lugar y qué pasa)</label>
+                                <textarea id="admin-detalle" required placeholder="Explica los detalles para que los administradores revisen y publiquen el evento..."></textarea>
+                            </div>
 
-            // Los usuarios entran con la cédula; el administrador entra con su usuario
-            const encontrado = obtenerUsuarios().find(u => {
-                if (u.password !== password) return false;
-                if (esCedula) return Boolean(u.cedula) && u.cedula === cedula;
-                return u.rol === "admin" && u.usuario.toLowerCase() === texto;
-            });
+                            <button type="submit" id="btn-enviar-admin" class="btn btn-donar">Enviar Mensaje a Administradores</button>
+                        </form>
+                        <p id="msg-admin-feedback" class="mensaje-feedback"></p>
+                    </div>
 
-            if (!encontrado) {
-                if (msgLogin) {
-                    msgLogin.style.color = "#ff7582";
-                    msgLogin.textContent = "Cédula o contraseña incorrectos.";
-                }
-                return;
-            }
+                    <div id="historial-mensajes-admin" class="admin-msg-historial"></div>
+                </div>
+            </div>
+        </section>
+        """
 
-            guardarSesion(encontrado.usuario);
-            formLogin.reset();
-            actualizarEstadoAccesoUI();
-            renderizarTodo(null);
-            irAPaginaPrincipal();
-        });
-    }
+  if boton_id == "donaciones":
+    don = CONFIG_PAGINA["donaciones"]
+    cuentas_html = "".join([
+        f"""
+            <div class="cuenta-tarjeta">
+                <span class="cuenta-banco">{c['nombre']}</span>
+                <p class="cuenta-etiqueta">{c['etiqueta']}</p>
+                <p class="cuenta-numero">{c['dato']}</p>
+                <button type="button" class="btn btn-pequeno btn-copiar-cuenta" data-copiar="{c['nombre']}: {c['dato']}">Copiar</button>
+            </div>
+            """
+        for c in don["cuentas"]
+    ])
+    return f"""
+        <section id="donaciones" class="section">
+            <div style="padding: 0 50px;">
+                <div class="content-box">
+                    <div class="section-header">
+                        <h2>{don['titulo_seccion']}</h2>
+                        <p>{don['descripcion']}</p>
+                    </div>
 
-    if (btnTopCerrar) {
-        btnTopCerrar.addEventListener("click", () => {
-            guardarSesion("");
-            if (inputRemitenteAdmin) inputRemitenteAdmin.value = "";
-            limpiarImagenAdmin();
-            ocultarBotonPublicada();
-            actualizarEstadoAccesoUI();
-            renderizarTodo(null);
-        });
-    }
+                    <div class="donacion-accion-area">
+                        <button type="button" class="btn btn-donar" id="btn-quiero-donar" aria-expanded="false" aria-controls="panel-cuentas-donacion">
+                            {don['texto_boton']}
+                        </button>
 
-    // Donaciones: desplegar cuentas y copiar
-    const btnQuieroDonar = document.getElementById("btn-quiero-donar");
-    const panelCuentasDonacion = document.getElementById("panel-cuentas-donacion");
+                        <div id="panel-cuentas-donacion" class="cuentas-desplegable" style="display:none;">
+                            {cuentas_html}
+                        </div>
+                    </div>
 
-    if (btnQuieroDonar && panelCuentasDonacion) {
-        btnQuieroDonar.addEventListener("click", () => {
-            const estaVisible = panelCuentasDonacion.style.display === "grid";
-            panelCuentasDonacion.style.display = estaVisible ? "none" : "grid";
-            btnQuieroDonar.setAttribute("aria-expanded", String(!estaVisible));
-        });
-    }
+                    <p class="mensaje-motivador-donacion">
+                        {don['mensaje_motivador']}
+                    </p>
+                </div>
+            </div>
+        </section>
+        """
 
-    document.querySelectorAll(".btn-copiar-cuenta").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const textoCopiar = btn.getAttribute("data-copiar") || "";
-            if (!textoCopiar) return;
-            navigator.clipboard.writeText(textoCopiar).then(() => {
-                alert("Copiado: " + textoCopiar);
-            }).catch(() => {
-                alert(textoCopiar);
-            });
-        });
-    });
-
-    actualizarEstadoAccesoUI();
-    renderizarTodo(null);
-    renderizarMensajesAdmin();
-});
-
-// ---------------------------------------------------------------------
-// 📱 TELÉFONO: menú de tres rayas y botón de acceso que sale y se guarda
-// ---------------------------------------------------------------------
-(function () {
-    const body = document.body;
-    const btnMenu = document.getElementById("btn-menu-movil");
-    const barraAcceso = document.getElementById("barra-acceso");
-    const btnAuth = document.getElementById("btn-auth-movil");
-
-    // El logo de la barra superior usa la misma imagen del menú lateral
-    const logoMenu = document.querySelector(".sidebar-logo img");
-    const logoBarra = document.getElementById("logo-barra-movil");
-    if (logoMenu && logoBarra) logoBarra.src = logoMenu.src;
-
-    function abrirMenu(abrir) {
-        body.classList.toggle("menu-abierto", abrir);
-        if (btnMenu) {
-            btnMenu.setAttribute("aria-expanded", String(abrir));
-            btnMenu.setAttribute("aria-label", abrir ? "Cerrar menú" : "Abrir menú");
-        }
-        if (abrir) abrirAcceso(false);
-    }
-
-    function abrirAcceso(abrir) {
-        if (!barraAcceso) return;
-        barraAcceso.classList.toggle("abierto", abrir);
-        if (btnAuth) {
-            btnAuth.setAttribute("aria-expanded", String(abrir));
-            btnAuth.setAttribute("aria-label", abrir ? "Cerrar acceso de usuario" : "Abrir acceso de usuario");
-        }
-        if (abrir) abrirMenu(false);
-    }
-
-    if (btnMenu) btnMenu.addEventListener("click", () => abrirMenu(!body.classList.contains("menu-abierto")));
-    if (btnAuth) btnAuth.addEventListener("click", () => abrirAcceso(!barraAcceso.classList.contains("abierto")));
-
-    // Al tocar una opción del menú (o el logo), el menú se esconde solo
-    document.querySelectorAll("#menu-principal-6 a, .logo-barra-movil").forEach(el => {
-        el.addEventListener("click", () => abrirMenu(false));
-    });
-
-    // Al elegir iniciar sesión, crear usuario o cerrar sesión, el panel se guarda
-    ["btn-top-login", "btn-top-crear", "btn-top-cerrar"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener("click", () => abrirAcceso(false));
-    });
-
-    // Tocar fuera del panel de acceso lo guarda
-    document.addEventListener("click", (e) => {
-        if (barraAcceso && barraAcceso.classList.contains("abierto") && !barraAcceso.contains(e.target)) {
-            abrirAcceso(false);
-        }
-    });
-
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            abrirMenu(false);
-            abrirAcceso(false);
-        }
-    });
-
-    // Si la pantalla pasa a tamaño PC, se limpia todo
-    window.addEventListener("resize", () => {
-        if (window.innerWidth > 768) {
-            abrirMenu(false);
-            abrirAcceso(false);
-        }
-    });
-})();
+  return ""
 
 
-// ---------------------------------------------------------------------
-// 🎬 Video de la imagen principal: siempre sin sonido y en bucle
-// ---------------------------------------------------------------------
-(function () {
-    const video = document.querySelector(".video-hero-principal");
-    if (!video) return;
+MENU_6_BOTONES_HTML = "".join([
+    f'<li><a href="#{b["id"]}" data-menu-id="{b["id"]}">{b["titulo_menu"]}</a></li>'
+    for b in MENU_6_BOTONES
+])
 
-    video.muted = true;
-    video.defaultMuted = true;
-    video.loop = true;
+SECCIONES_6_BOTONES_HTML = "".join(
+    [render_seccion_boton(b["id"]) for b in MENU_6_BOTONES]
+)
 
-    function reproducir() {
-        const intento = video.play();
-        if (intento && typeof intento.catch === "function") intento.catch(() => {});
-    }
+PROTESTAS_INICIALES = next(
+    (s["proyectos"] for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"),
+    [],
+)
 
-    reproducir();
-    // Si el navegador bloqueó el autoplay, arranca con el primer toque
-    ["touchstart", "click", "scroll"].forEach(evento => {
-        window.addEventListener(evento, reproducir, { once: true, passive: true });
-    });
-})();
+DATOS_JS = json.dumps(
+    {
+        "adminDefecto": CONFIG_PAGINA["admin_defecto"],
+        "noticiasDefecto": CONFIG_PAGINA["blog_config"]["noticias_iniciales"],
+        "protestasDefecto": PROTESTAS_INICIALES,
+        "menu6Ids": [b["id"] for b in MENU_6_BOTONES],
+        "patronUrl": CONFIG_PAGINA["patron_url"],
+    },
+    ensure_ascii=False,
+)
+
+HERO_MEDIA_HTML = VIDEO_HERO_HTML or (
+    f'<img src="{CONFIG_PAGINA["collage_url"]}" alt="Playas de República Dominicana">'
+)
+
+HTML_TEMPLATE = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{CONFIG_PAGINA['nombre_empresa']}</title>
+    <link rel="stylesheet" href="recursos/estilos.css?v=10">
+</head>
+<body>
+
+    <header class="barra-movil" id="barra-movil">
+        <a href="#inicio" class="logo-barra-movil" aria-label="Regresar al inicio">
+            <img id="logo-barra-movil" alt="Corazón Dominicano Tropical">
+        </a>
+    </header>
+
+    <button type="button" class="btn-menu-movil" id="btn-menu-movil" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-principal-6">
+        <span class="raya"></span>
+        <span class="raya"></span>
+        <span class="raya"></span>
+    </button>
+
+    <div class="top-left-auth" id="barra-acceso" aria-label="Acceso de usuario">
+        <button type="button" class="btn-auth-movil" id="btn-auth-movil" aria-label="Abrir acceso de usuario" aria-expanded="false">
+            <svg class="icono-usuario" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5z"/></svg>
+            <svg class="icono-cerrar" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+        <div class="acceso-panel">
+            <span id="badge-usuario-activo" class="usuario-badge" style="display:none;"></span>
+            <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar Sesión</button>
+            <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear Usuario</button>
+            <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div id="modal-login" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-login">
+        <div class="modal-ventana">
+            <button type="button" class="modal-cerrar" data-cerrar-modal="modal-login" aria-label="Cerrar ventana">×</button>
+            <h3 id="titulo-modal-login">Iniciar Sesión</h3>
+            <p class="acceso-lema">Entra con tu cédula y tu contraseña para comentar y enviar mensajes a los administradores.</p>
+            <form id="form-login-usuario">
+                <div class="campo-grupo">
+                    <label for="login-usuario">Cédula</label>
+                    <input type="text" id="login-usuario" required placeholder="000-0000000-0" maxlength="40" autocomplete="username">
+                </div>
+                <div class="campo-grupo">
+                    <label for="login-password">Contraseña</label>
+                    <input type="password" id="login-password" required placeholder="Tu contraseña">
+                </div>
+                <button type="submit" class="btn btn-donar">Entrar</button>
+            </form>
+            <p id="msg-login" class="mensaje-feedback"></p>
+        </div>
+    </div>
+
+    <div id="modal-crear-usuario" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-crear">
+        <div class="modal-ventana">
+            <button type="button" class="modal-cerrar" data-cerrar-modal="modal-crear-usuario" aria-label="Cerrar ventana">×</button>
+            <h3 id="titulo-modal-crear">Crear Usuario</h3>
+            <p class="acceso-lema">“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”</p>
+            <form id="form-registro-usuario">
+                <div class="campo-grupo">
+                    <label for="reg-cedula">Cédula</label>
+                    <input type="text" id="reg-cedula" required placeholder="000-0000000-0" inputmode="numeric" maxlength="13" autocomplete="off">
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-nombre">Nombre completo</label>
+                    <input type="text" id="reg-nombre" required placeholder="Nombre y apellidos" autocomplete="name">
+                </div>
+
+                <div class="acceso-fila-dos">
+                    <div class="campo-grupo">
+                        <label for="reg-usuario">Nombre de usuario</label>
+                        <input type="text" id="reg-usuario" required placeholder="Ej. voz_del_barrio">
+                    </div>
+                    <div class="campo-grupo">
+                        <label for="reg-comunidad">Junta de vecinos, sector o oficio</label>
+                        <input type="text" id="reg-comunidad" required placeholder="Ej. Junta de vecinos, vendedor de coco...">
+                    </div>
+                </div>
+
+                <div class="campo-grupo">
+                    <label for="reg-email">Correo electrónico</label>
+                    <input type="email" id="reg-email" required placeholder="correo@ejemplo.com">
+                </div>
+
+                <div class="acceso-fila-dos">
+                    <div class="campo-grupo">
+                        <label for="reg-password">Contraseña</label>
+                        <input type="password" id="reg-password" required placeholder="Crea una contraseña">
+                    </div>
+                    <div class="campo-grupo">
+                        <label for="reg-confirmar-password">Confirmar contraseña</label>
+                        <input type="password" id="reg-confirmar-password" required placeholder="Repite tu contraseña">
+                    </div>
+                </div>
+
+                <label class="campo-terminos" for="reg-terminos">
+                    <input type="checkbox" id="reg-terminos" required>
+                    <span>Acepto todos los términos y políticas de esta página</span>
+                </label>
+
+                <button type="submit" class="btn btn-donar">Crear Usuario</button>
+            </form>
+            <p id="msg-registro" class="mensaje-feedback"></p>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <section id="inicio" class="hero">
+            <div class="collage-container">
+                {HERO_MEDIA_HTML}
+            </div>
+
+            <div class="hero-text-area">
+                <div class="content-box">
+                    <h1>{CONFIG_PAGINA['slogan_principal']}</h1>
+                    <p>{CONFIG_PAGINA['descripcion_hero']}</p>
+                    <div class="hero-actions">
+                        <a href="#mensajes-admin" class="btn btn-donar">Avisar Evento a Admin</a>
+                        <a href="#blog" class="btn">Ir al Blog</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {SECCIONES_6_BOTONES_HTML}
+    </div>
+
+    <div class="ticker-inferior" aria-label="Mensaje ciudadano en movimiento">
+        <div class="ticker-pista">
+            <div class="ticker-frase">
+                🔥 EL PUEBLO UNIDO!!! <span class="resalte-alerta">•</span> UN GOBIERNO DE RODILLAS 🔥
+            </div>
+        </div>
+    </div>
+
+    <aside class="sidebar-border"></aside>
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <a href="#inicio" class="btn-inicio-img" title="Regresar al inicio" aria-label="Regresar al inicio">
+                <img src="{CONFIG_PAGINA['logo_url']}" alt="Corazón Dominicano Tropical - Ir al inicio">
+            </a>
+        </div>
+
+        <ul class="sidebar-nav" id="menu-principal-6">
+            {MENU_6_BOTONES_HTML}
+        </ul>
+
+        <div class="sidebar-socials">
+            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" rel="noopener noreferrer" title="Facebook" aria-label="Facebook de Corazón RD">
+                <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            </a>
+            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram de Corazón RD">
+                <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            </a>
+            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="YouTube de Corazón RD">
+                <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" rel="noopener noreferrer" title="TikTok" aria-label="TikTok de Corazón RD">
+                <svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+            </a>
+        </div>
+    </aside>
+
+    <script>
+        window.CORAZON_RD_DATOS = {DATOS_JS};
+    </script>
+    <script src="recursos/app_logica.js?v=10"></script>
+</body>
+</html>
+"""
+
+
+EXTENSIONES_PUBLICAS = (
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico",
+    ".woff", ".woff2", ".ttf",
+)
+INTENTOS_ADMIN = {}
+LIMITE_INTENTOS_ADMIN = 5
+VENTANA_INTENTOS_SEG = 600
+LIMITE_GLOBAL_ADMIN = 30
+
+
+class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, directory=".", **kwargs)
+
+  # --- Solo se entregan estilos, scripts e imágenes: nunca app.py, claves ni carpetas ---
+  def ruta_publica(self, ruta):
+    ruta = urllib.parse.unquote(ruta)
+    if ".." in ruta or "\\" in ruta or ruta.endswith("/"):
+      return False
+    partes = [parte for parte in ruta.split("/") if parte]
+    if not partes or any(parte.startswith(".") for parte in partes):
+      return False
+    return os.path.splitext(partes[-1])[1].lower() in EXTENSIONES_PUBLICAS
+
+  def do_HEAD(self):
+    ruta_limpia = self.path.split("?")[0]
+    if ruta_limpia in ("", "/", "/index.html") or self.ruta_publica(ruta_limpia):
+      return super().do_HEAD()
+    self.send_error(404, "No encontrado")
+
+  def do_GET(self):
+    ruta_limpia = self.path.split("?")[0]
+    if ruta_limpia in ("", "/", "/index.html"):
+      cuerpo = HTML_TEMPLATE.encode("utf-8")
+      self.send_response(200)
+      self.send_header("Content-Type", "text/html; charset=utf-8")
+      self.send_header("Content-Length", str(len(cuerpo)))
+      self.end_headers()
+      self.wfile.write(cuerpo)
+      return
+    if ruta_limpia == "/video-principal" and VIDEO_RUTA:
+      self.servir_video()
+      return
+    if not self.ruta_publica(ruta_limpia):
+      self.send_error(404, "No encontrado")
+      return
+    return super().do_GET()
+
+  # --- Acceso del administrador: la clave se valida aquí, en el servidor ---
+  def responder_json(self, codigo, datos):
+    cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
+    self.send_response(codigo)
+    self.send_header("Content-Type", "application/json; charset=utf-8")
+    self.send_header("Content-Length", str(len(cuerpo)))
+    self.send_header("Cache-Control", "no-store")
+    self.end_headers()
+    self.wfile.write(cuerpo)
+
+  def ip_cliente(self):
+    reenviada = self.headers.get("X-Forwarded-For", "")
+    if reenviada:
+      return reenviada.split(",")[-1].strip()
+    return self.client_address[0]
+
+  def do_POST(self):
+    if self.path.split("?")[0] != "/api/admin-login":
+      self.send_error(404, "No encontrado")
+      return
+
+    if not CLAVE_ADMIN:
+      self.responder_json(503, {"ok": False, "error": "admin_no_configurado"})
+      return
+
+    ahora = time.time()
+    ip = self.ip_cliente()
+    for clave_ip in list(INTENTOS_ADMIN):
+      INTENTOS_ADMIN[clave_ip] = [t for t in INTENTOS_ADMIN[clave_ip] if ahora - t < VENTANA_INTENTOS_SEG]
+      if not INTENTOS_ADMIN[clave_ip]:
+        del INTENTOS_ADMIN[clave_ip]
+    fallos_ip = len(INTENTOS_ADMIN.get(ip, []))
+    fallos_total = sum(len(v) for v in INTENTOS_ADMIN.values())
+    if fallos_ip >= LIMITE_INTENTOS_ADMIN or fallos_total >= LIMITE_GLOBAL_ADMIN:
+      self.responder_json(429, {"ok": False, "error": "demasiados_intentos"})
+      return
+
+    try:
+      largo = int(self.headers.get("Content-Length", "0"))
+      if largo <= 0 or largo > 2048:
+        raise ValueError
+      datos = json.loads(self.rfile.read(largo).decode("utf-8"))
+      usuario = str(datos.get("usuario", "")).strip().lower()
+      clave = str(datos.get("password", ""))
+    except (ValueError, UnicodeDecodeError, AttributeError):
+      self.responder_json(400, {"ok": False, "error": "solicitud_invalida"})
+      return
+
+    usuario_ok = hmac.compare_digest(usuario.encode("utf-8"), USUARIO_ADMIN.lower().encode("utf-8"))
+    clave_ok = hmac.compare_digest(clave.encode("utf-8"), CLAVE_ADMIN.encode("utf-8"))
+    if usuario_ok and clave_ok:
+      INTENTOS_ADMIN.pop(ip, None)
+      self.responder_json(200, {"ok": True, "usuario": USUARIO_ADMIN})
+      return
+
+    INTENTOS_ADMIN.setdefault(ip, []).append(ahora)
+    self.responder_json(401, {"ok": False, "error": "credenciales"})
+
+  def servir_video(self):
+    try:
+      tamano = os.path.getsize(VIDEO_RUTA)
+    except OSError:
+      self.send_error(404, "Video no encontrado")
+      return
+
+    inicio, fin, parcial = 0, tamano - 1, False
+    rango = self.headers.get("Range", "")
+    if rango.startswith("bytes="):
+      try:
+        desde, _, hasta = rango[6:].partition("-")
+        if desde == "":
+          inicio = max(tamano - int(hasta), 0)
+        else:
+          inicio = int(desde)
+          if hasta:
+            fin = min(int(hasta), tamano - 1)
+        parcial = True
+      except ValueError:
+        inicio, fin, parcial = 0, tamano - 1, False
+      if parcial and (inicio > fin or inicio >= tamano):
+        self.send_response(416)
+        self.send_header("Content-Range", f"bytes */{tamano}")
+        self.end_headers()
+        return
+
+    longitud = fin - inicio + 1
+    self.send_response(206 if parcial else 200)
+    self.send_header("Content-Type", VIDEO_MIME)
+    self.send_header("Accept-Ranges", "bytes")
+    self.send_header("Content-Length", str(longitud))
+    if parcial:
+      self.send_header("Content-Range", f"bytes {inicio}-{fin}/{tamano}")
+    self.send_header("Cache-Control", "public, max-age=3600")
+    self.end_headers()
+
+    try:
+      with open(VIDEO_RUTA, "rb") as archivo:
+        archivo.seek(inicio)
+        restante = longitud
+        while restante > 0:
+          bloque = archivo.read(min(65536, restante))
+          if not bloque:
+            break
+          self.wfile.write(bloque)
+          restante -= len(bloque)
+    except (BrokenPipeError, ConnectionResetError):
+      pass
+
+  def log_message(self, format, *args):
+    sys.stderr.write(f"[CorazonRD] {self.address_string()} - {format % args}\n")
+
+
+class ServidorReutilizable(socketserver.ThreadingMixIn, http.server.HTTPServer):
+  allow_reuse_address = True
+  daemon_threads = True
+
+
+def abrir_navegador_local(url):
+  if not os.environ.get("RENDER"):
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+
+if __name__ == "__main__":
+  puerto = int(os.environ.get("PORT", 8000))
+  host = "0.0.0.0"
+  servidor = ServidorReutilizable((host, puerto), ManejadorCorazonRD)
+  print(f"Servidor CORAZÓN RD escuchando en http://{host}:{puerto}", flush=True)
+  if not CLAVE_ADMIN:
+    print(
+        "AVISO: no hay clave de administrador. Pon el archivo datos_administrador.json junto "
+        "a app.py (o define FAFI_ADMIN_PASSWORD) para poder entrar como admin.",
+        flush=True,
+    )
+  abrir_navegador_local(f"http://127.0.0.1:{puerto}")
+  try:
+    servidor.serve_forever()
+  except KeyboardInterrupt:
+    print("\nServidor detenido.", flush=True)
+  finally:
+    servidor.server_close()
