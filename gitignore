@@ -1,0 +1,6 @@
+# Datos privados del administrador: nunca se suben a GitHub
+datos_administrador.json
+.admin_clave
+.env
+__pycache__/
+*.pyc
