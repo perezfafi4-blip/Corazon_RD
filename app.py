@@ -164,24 +164,40 @@ VIDEO_HERO_HTML = (
 
 
 # =====================================================================
-# 🔐 CLAVE DEL ADMINISTRADOR (solo vive en el servidor, nunca en el código)
-#   1) Variable de entorno FAFI_ADMIN_PASSWORD (recomendado en Render), o
-#   2) Archivo local ".admin_clave" junto a app.py (no se sube a GitHub ni se sirve)
+# 🔐 DATOS DEL ADMINISTRADOR (viven fuera del código, solo en el servidor)
+#   Archivo "datos_administrador.json" junto a app.py. No se sirve por la web
+#   y no se sube a GitHub. La variable FAFI_ADMIN_PASSWORD, si existe, manda
+#   sobre la contraseña del archivo (útil en Render).
 # =====================================================================
-def cargar_clave_admin():
-  clave = os.environ.get("FAFI_ADMIN_PASSWORD", "").strip()
-  if clave:
-    return clave
-  ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".admin_clave")
+ARCHIVO_DATOS_ADMIN = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "datos_administrador.json"
+)
+
+
+def cargar_datos_admin():
+  datos = {}
   try:
-    with open(ruta, encoding="utf-8") as archivo:
-      return archivo.read().strip()
-  except OSError:
-    return ""
+    with open(ARCHIVO_DATOS_ADMIN, encoding="utf-8") as archivo:
+      leido = json.load(archivo)
+      if isinstance(leido, dict):
+        datos = leido
+  except FileNotFoundError:
+    pass
+  except (OSError, ValueError):
+    print("AVISO: no se pudo leer datos_administrador.json (revisa que sea un JSON válido).", flush=True)
+
+  clave_entorno = os.environ.get("FAFI_ADMIN_PASSWORD", "").strip()
+  return {
+      "usuario": str(datos.get("usuario") or "fafi_admin").strip(),
+      "password": clave_entorno or str(datos.get("password") or "").strip(),
+      "comunidad": str(datos.get("comunidad") or "Administración Central CORAZÓN RD").strip(),
+      "email": str(datos.get("email") or "").strip(),
+  }
 
 
-CLAVE_ADMIN = cargar_clave_admin()
-USUARIO_ADMIN = "fafi_admin"
+DATOS_ADMIN = cargar_datos_admin()
+CLAVE_ADMIN = DATOS_ADMIN["password"]
+USUARIO_ADMIN = DATOS_ADMIN["usuario"]
 
 # =====================================================================
 # 🧩 CONFIGURACIÓN Y LOS 6 BOTONES DEL MENÚ EN UN SOLO LUGAR
@@ -195,8 +211,7 @@ CONFIG_PAGINA = {
     ),
     "admin_defecto": {
         "usuario": USUARIO_ADMIN,
-        "comunidad": "Administración Central CORAZÓN RD",
-        "email": "admin@corazonrd.org",
+        "comunidad": DATOS_ADMIN["comunidad"],
         "rol": "admin",
     },
     "ideales_bloque": {
@@ -730,7 +745,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=8">
+    <link rel="stylesheet" href="recursos/estilos.css?v=9">
 </head>
 <body>
 
@@ -894,7 +909,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=8"></script>
+    <script src="recursos/app_logica.js?v=9"></script>
 </body>
 </html>
 """
@@ -996,7 +1011,7 @@ class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
       self.responder_json(400, {"ok": False, "error": "solicitud_invalida"})
       return
 
-    usuario_ok = hmac.compare_digest(usuario.encode("utf-8"), USUARIO_ADMIN.encode("utf-8"))
+    usuario_ok = hmac.compare_digest(usuario.encode("utf-8"), USUARIO_ADMIN.lower().encode("utf-8"))
     clave_ok = hmac.compare_digest(clave.encode("utf-8"), CLAVE_ADMIN.encode("utf-8"))
     if usuario_ok and clave_ok:
       INTENTOS_ADMIN.pop(ip, None)
@@ -1077,8 +1092,8 @@ if __name__ == "__main__":
   print(f"Servidor CORAZÓN RD escuchando en http://{host}:{puerto}", flush=True)
   if not CLAVE_ADMIN:
     print(
-        "AVISO: no hay clave de administrador. Define FAFI_ADMIN_PASSWORD o crea el archivo "
-        ".admin_clave junto a app.py para poder entrar como admin.",
+        "AVISO: no hay clave de administrador. Pon el archivo datos_administrador.json junto "
+        "a app.py (o define FAFI_ADMIN_PASSWORD) para poder entrar como admin.",
         flush=True,
     )
   abrir_navegador_local(f"http://127.0.0.1:{puerto}")
