@@ -1167,10 +1167,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // ---------------------------------------------------------------------
-// 🎬 Video pequeño de la imagen principal: siempre sin sonido y en bucle
+// 🎬 Video de la imagen principal: siempre sin sonido y en bucle
 // ---------------------------------------------------------------------
 (function () {
-    const video = document.querySelector(".video-hero");
+    const video = document.querySelector(".video-hero-principal");
     if (!video) return;
 
     video.muted = true;
