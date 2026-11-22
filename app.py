@@ -150,10 +150,11 @@ if candidatos_video:
   VIDEO_MIME = TIPOS_VIDEO.get(os.path.splitext(VIDEO_RUTA)[1].lower(), "video/mp4")
   print(f"Video de la imagen principal: {VIDEO_RUTA}", flush=True)
 
-# Pequeño video sobre la imagen principal: sin sonido, en bucle (si no hay video, no se muestra)
+# Video de la imagen principal: sin sonido y en bucle (si no hay video, se muestra la imagen)
 VIDEO_HERO_HTML = (
-    '<video class="video-hero" autoplay muted loop playsinline preload="auto" '
-    'disablepictureinpicture aria-hidden="true" src="/video-principal"></video>'
+    '<video class="video-hero-principal" autoplay muted loop playsinline preload="auto" '
+    'disablepictureinpicture aria-label="Video de las playas de República Dominicana" '
+    'src="/video-principal"></video>'
     if VIDEO_RUTA
     else ""
 )
@@ -698,13 +699,17 @@ DATOS_JS = json.dumps(
     ensure_ascii=False,
 )
 
+HERO_MEDIA_HTML = VIDEO_HERO_HTML or (
+    f'<img src="{CONFIG_PAGINA["collage_url"]}" alt="Playas de República Dominicana">'
+)
+
 HTML_TEMPLATE = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=5">
+    <link rel="stylesheet" href="recursos/estilos.css?v=6">
 </head>
 <body>
 
@@ -810,8 +815,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <div class="main-content">
         <section id="inicio" class="hero">
             <div class="collage-container">
-                <img src="{CONFIG_PAGINA['collage_url']}" alt="Playas de República Dominicana">
-                {VIDEO_HERO_HTML}
+                {HERO_MEDIA_HTML}
             </div>
 
             <div class="hero-text-area">
@@ -872,7 +876,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     <script>
         window.CORAZON_RD_DATOS = {DATOS_JS};
     </script>
-    <script src="recursos/app_logica.js?v=5"></script>
+    <script src="recursos/app_logica.js?v=6"></script>
 </body>
 </html>
 """
