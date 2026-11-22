@@ -1199,6 +1199,40 @@ section {
     cursor: pointer;
 }
 
+/* Subir protestas (solo administrador) */
+.admin-protesta-barra {
+    display: none;
+    margin: 0 0 26px 0;
+}
+
+.admin-protesta-barra.visible {
+    display: block;
+}
+
+.admin-protesta-panel {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.protesta-mensaje {
+    margin: 10px 0 14px 0;
+    font-size: 0.97rem;
+    line-height: 1.55;
+    color: #ececec;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.protesta-fecha {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: #bdbdbd;
+}
+
+.btn-borrar-protesta {
+    margin-bottom: 12px;
+}
+
 /* =====================================================================
    🇩🇴 SECCIONES CON LOS COLORES DE LA BANDERA (PC y teléfono)
    Protesta = rojo · Quiénes Somos = blanco · Blog = azul
