@@ -935,35 +935,85 @@ document.addEventListener("DOMContentLoaded", () => {
         renderizarMensajesAdmin();
     }
 
+    // Cédula: solo números, formato 000-0000000-0 (11 dígitos)
+    function soloDigitos(texto) {
+        return String(texto || "").replace(/\D/g, "");
+    }
+
+    function formatearCedula(digitos) {
+        const d = digitos.slice(0, 11);
+        if (d.length <= 3) return d;
+        if (d.length <= 10) return d.slice(0, 3) + "-" + d.slice(3);
+        return d.slice(0, 3) + "-" + d.slice(3, 10) + "-" + d.slice(10);
+    }
+
+    // Da formato mientras se escribe (si es el usuario admin, escribe letras y no se toca)
+    function activarFormatoCedula(input) {
+        if (!input) return;
+        input.addEventListener("input", () => {
+            if (/^[\d-]*$/.test(input.value)) {
+                input.value = formatearCedula(soloDigitos(input.value));
+            }
+        });
+    }
+
+    activarFormatoCedula(document.getElementById("reg-cedula"));
+    activarFormatoCedula(document.getElementById("login-usuario"));
+
     const formRegistro = document.getElementById("form-registro-usuario");
     if (formRegistro) {
         formRegistro.addEventListener("submit", (e) => {
             e.preventDefault();
+            const cedula = soloDigitos(document.getElementById("reg-cedula").value);
+            const nombre = document.getElementById("reg-nombre").value.trim();
             const usuario = document.getElementById("reg-usuario").value.trim();
             const comunidad = document.getElementById("reg-comunidad").value.trim();
             const email = document.getElementById("reg-email").value.trim().toLowerCase();
             const password = document.getElementById("reg-password").value;
             const confirmar = document.getElementById("reg-confirmar-password").value;
+            const terminos = document.getElementById("reg-terminos");
 
-            if (!usuario || !comunidad || !email || !password || !confirmar) return;
-            if (password !== confirmar) {
+            function errorRegistro(texto) {
                 if (msgRegistro) {
                     msgRegistro.style.color = "#ff7582";
-                    msgRegistro.textContent = "Las contraseñas no coinciden.";
+                    msgRegistro.textContent = texto;
                 }
+            }
+
+            if (!cedula || !nombre || !usuario || !comunidad || !email || !password || !confirmar) return;
+            if (cedula.length !== 11) {
+                errorRegistro("La cédula debe tener 11 dígitos (000-0000000-0).");
+                return;
+            }
+            if (password !== confirmar) {
+                errorRegistro("Las contraseñas no coinciden.");
+                return;
+            }
+            if (!terminos || !terminos.checked) {
+                errorRegistro("Debes aceptar los términos y políticas de esta página.");
                 return;
             }
 
             const usuarios = obtenerUsuarios();
+            if (usuarios.some(u => u.cedula === cedula)) {
+                errorRegistro("Esa cédula ya está registrada.");
+                return;
+            }
             if (usuarios.some(u => u.usuario.toLowerCase() === usuario.toLowerCase() || u.email === email)) {
-                if (msgRegistro) {
-                    msgRegistro.style.color = "#ff7582";
-                    msgRegistro.textContent = "Ese usuario o correo ya está registrado.";
-                }
+                errorRegistro("Ese usuario o correo ya está registrado.");
                 return;
             }
 
-            usuarios.push({ usuario, comunidad, email, password, rol: "usuario" });
+            usuarios.push({
+                usuario,
+                nombre,
+                cedula,
+                comunidad,
+                email,
+                password,
+                rol: "usuario",
+                terminosAceptados: true
+            });
             guardarUsuarios(usuarios);
             guardarSesion(usuario);
             formRegistro.reset();
@@ -977,16 +1027,22 @@ document.addEventListener("DOMContentLoaded", () => {
     if (formLogin) {
         formLogin.addEventListener("submit", (e) => {
             e.preventDefault();
-            const identificador = document.getElementById("login-usuario").value.trim().toLowerCase();
+            const texto = document.getElementById("login-usuario").value.trim().toLowerCase();
+            const cedula = soloDigitos(texto);
             const password = document.getElementById("login-password").value;
-            const encontrado = obtenerUsuarios().find(
-                u => (u.usuario.toLowerCase() === identificador || (u.email && u.email === identificador)) && u.password === password
-            );
+            const esCedula = /^[\d-]+$/.test(texto);
+
+            // Los usuarios entran con la cédula; el administrador entra con su usuario
+            const encontrado = obtenerUsuarios().find(u => {
+                if (u.password !== password) return false;
+                if (esCedula) return Boolean(u.cedula) && u.cedula === cedula;
+                return u.rol === "admin" && u.usuario.toLowerCase() === texto;
+            });
 
             if (!encontrado) {
                 if (msgLogin) {
                     msgLogin.style.color = "#ff7582";
-                    msgLogin.textContent = "Usuario/correo o contraseña incorrectos.";
+                    msgLogin.textContent = "Cédula o contraseña incorrectos.";
                 }
                 return;
             }
