@@ -207,7 +207,7 @@ CONFIG_PAGINA = {
     "slogan_principal": "CORAZÓN RD",
     "descripcion_hero": (
         "Un espacio de coordinación ciudadana donde el pueblo hace valer su"
-        " fuerza con hechos."
+        " fuerza como pueblo."
     ),
     "admin_defecto": {
         "usuario": USUARIO_ADMIN,
