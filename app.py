@@ -1,1145 +1,876 @@
-import base64
-import functools
-import hmac
-import http.server
-import json
-import os
-import socketserver
-import sys
-import threading
-import time
-import unicodedata
-import urllib.parse
-import webbrowser
+/* =====================================================================
+   CORAZÓN RD — app_logica.js
+   Va en la carpeta "recursos" (recursos/app_logica.js).
+   Maneja: menú móvil, icono de usuario, login (cédula), registro,
+   blog, protestas, mensajes a administradores y donaciones.
+   ===================================================================== */
+(function () {
+  "use strict";
 
-# =====================================================================
-# 🛠️ DETECCIÓN INTELIGENTE DE LOGO, PATRÓN Y COLLAGE TURÍSTICO
-# =====================================================================
-logo_src = "https://picsum.photos/id/10/140/60"
-patron_src = ""
-collage_src = ""
+  var DATOS = window.CORAZON_RD_DATOS || {};
+  var PREFIJO = "corazonrd_";
+  var REACCIONES = ["👍", "❤️", "🔥", "👏", "😢"];
 
-EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".webp", ".gif")
-EXTENSIONES_VIDEO = (".mp4", ".webm", ".m4v", ".mov")
-TIPOS_VIDEO = {
-    ".mp4": "video/mp4",
-    ".m4v": "video/mp4",
-    ".webm": "video/webm",
-    ".mov": "video/quicktime",
-}
+  /* ---------- utilidades ---------- */
+  function $(id) { return document.getElementById(id); }
 
-
-def normalizar_texto(texto):
-  nfkd = unicodedata.normalize("NFKD", texto.lower())
-  return "".join(c for c in nfkd if not unicodedata.combining(c))
-
-
-def cargar_imagen_base64(ruta_archivo):
-  nombre_lower = ruta_archivo.lower()
-  with open(ruta_archivo, "rb") as img_file:
-    encoded = base64.b64encode(img_file.read()).decode("utf-8")
-    if nombre_lower.endswith(".png"):
-      mime = "image/png"
-    elif nombre_lower.endswith(".webp"):
-      mime = "image/webp"
-    elif nombre_lower.endswith(".gif"):
-      mime = "image/gif"
-    else:
-      mime = "image/jpeg"
-    return f"data:{mime};base64,{encoded}"
-
-
-def obtener_rutas_busqueda():
-  rutas = ["."]
-  escritorios = [
-      os.path.expanduser("~/Desktop"),
-      os.path.expanduser("~/OneDrive/Desktop"),
-      os.path.expanduser("~/OneDrive/Escritorio"),
-      os.path.expanduser("~/Escritorio"),
-  ]
-  for esc in escritorios:
-    if os.path.isdir(esc):
-      rutas.append(esc)
-      carpeta_rd = os.path.join(esc, "pagina rd")
-      if os.path.isdir(carpeta_rd):
-        rutas.append(carpeta_rd)
-      for item in os.listdir(esc):
-        sub = os.path.join(esc, item)
-        if os.path.isdir(sub):
-          rutas.append(sub)
-  return list(dict.fromkeys(os.path.abspath(r) for r in rutas))
-
-
-candidatos_logo = []
-candidatos_patron = []
-candidatos_collage = []
-candidatos_video = []
-
-for carpeta in obtener_rutas_busqueda():
-  try:
-    archivos = os.listdir(carpeta)
-  except OSError:
-    continue
-
-  for archivo in archivos:
-    ruta_completa = os.path.join(carpeta, archivo)
-    if not os.path.isfile(ruta_completa):
-      continue
-
-    nombre_norm = normalizar_texto(archivo)
-    tiene_extension = nombre_norm.endswith(EXTENSIONES_IMAGEN)
-
-    # Video pequeño de la imagen principal (se busca en las mismas carpetas)
-    if nombre_norm.endswith(EXTENSIONES_VIDEO):
-      prioridad = (
-          0
-          if any(k in nombre_norm for k in ("principal", "playa", "rd", "collage", "hero"))
-          else 1
-      )
-      candidatos_video.append((prioridad, ruta_completa))
-      continue
-
-    if "corazon dominicano tropical" in nombre_norm or nombre_norm.startswith(
-        "logo_corazon"
-    ):
-      if tiene_extension or "." not in nombre_norm:
-        prioridad = 0 if "corazon dominicano tropical" in nombre_norm else 1
-        candidatos_logo.append((prioridad, ruta_completa))
-
-    elif (
-        "fondo_rd_muchas_repetible" in nombre_norm
-        or "repetible" in nombre_norm
-        or "fondo_rd" in nombre_norm
-        or "patron" in nombre_norm
-        or "banderas" in nombre_norm
-    ):
-      if tiene_extension or "." not in nombre_norm:
-        prioridad = (
-            0
-            if "fondo_rd_muchas_repetible" in nombre_norm
-            or "repetible" in nombre_norm
-            else 1
-        )
-        candidatos_patron.append((prioridad, ruta_completa))
-
-    elif (
-        "playa_rd" in nombre_norm
-        or "playas" in nombre_norm
-        or "playa" in nombre_norm
-        or "collage" in nombre_norm
-        or "turistico" in nombre_norm
-        or "republica" in nombre_norm
-    ):
-      prioridad = 0 if "playa_rd" in nombre_norm else 1
-      candidatos_collage.append((prioridad, ruta_completa))
-
-if candidatos_logo:
-  candidatos_logo.sort(key=lambda x: x[0])
-  logo_src = cargar_imagen_base64(candidatos_logo[0][1])
-
-if candidatos_patron:
-  candidatos_patron.sort(key=lambda x: x[0])
-  patron_src = cargar_imagen_base64(candidatos_patron[0][1])
-
-if candidatos_collage:
-  candidatos_collage.sort(key=lambda x: x[0])
-  collage_src = cargar_imagen_base64(candidatos_collage[0][1])
-
-VIDEO_RUTA = ""
-VIDEO_MIME = "video/mp4"
-if candidatos_video:
-  candidatos_video.sort(key=lambda x: x[0])
-  VIDEO_RUTA = candidatos_video[0][1]
-  VIDEO_MIME = TIPOS_VIDEO.get(os.path.splitext(VIDEO_RUTA)[1].lower(), "video/mp4")
-  print(f"Video de la imagen principal: {VIDEO_RUTA}", flush=True)
-
-# Video de la imagen principal: sin sonido y en bucle (si no hay video, se muestra la imagen)
-VIDEO_HERO_HTML = (
-    '<video class="video-hero-principal" autoplay muted loop playsinline preload="auto" '
-    'disablepictureinpicture aria-label="Video de las playas de República Dominicana" '
-    'src="/video-principal"></video>'
-    if VIDEO_RUTA
-    else ""
-)
-
-
-# =====================================================================
-# 🔐 DATOS DEL ADMINISTRADOR (viven fuera del código, solo en el servidor)
-#   Archivo "datos_administrador.json" junto a app.py. No se sirve por la web
-#   y no se sube a GitHub. La variable FAFI_ADMIN_PASSWORD, si existe, manda
-#   sobre la contraseña del archivo (útil en Render).
-# =====================================================================
-ARCHIVO_DATOS_ADMIN = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "datos_administrador.json"
-)
-
-
-def cargar_datos_admin():
-  datos = {}
-  try:
-    with open(ARCHIVO_DATOS_ADMIN, encoding="utf-8") as archivo:
-      leido = json.load(archivo)
-      if isinstance(leido, dict):
-        datos = leido
-  except FileNotFoundError:
-    pass
-  except (OSError, ValueError):
-    print("AVISO: no se pudo leer datos_administrador.json (revisa que sea un JSON válido).", flush=True)
-
-  clave_entorno = os.environ.get("FAFI_ADMIN_PASSWORD", "").strip()
-  return {
-      "usuario": str(datos.get("usuario") or "fafi_admin").strip(),
-      "password": clave_entorno or str(datos.get("password") or "").strip(),
-      "comunidad": str(datos.get("comunidad") or "Administración Central CORAZÓN RD").strip(),
-      "email": str(datos.get("email") or "").strip(),
+  function el(etiqueta, clase, texto) {
+    var nodo = document.createElement(etiqueta);
+    if (clase) nodo.className = clase;
+    if (texto !== undefined && texto !== null) nodo.textContent = texto;
+    return nodo;
   }
 
-
-DATOS_ADMIN = cargar_datos_admin()
-CLAVE_ADMIN = DATOS_ADMIN["password"]
-USUARIO_ADMIN = DATOS_ADMIN["usuario"]
-
-# =====================================================================
-# 🧩 CONFIGURACIÓN Y LOS 6 BOTONES DEL MENÚ EN UN SOLO LUGAR
-# =====================================================================
-CONFIG_PAGINA = {
-    "nombre_empresa": "CORAZÓN RD",
-    "slogan_principal": "CORAZÓN RD",
-    "descripcion_hero": (
-        "Un espacio de coordinación ciudadana donde el pueblo hace valer su"
-        " fuerza como pueblo."
-    ),
-    "admin_defecto": {
-        "usuario": USUARIO_ADMIN,
-        "comunidad": DATOS_ADMIN["comunidad"],
-        "rol": "admin",
-    },
-    "ideales_bloque": {
-        "badge": "EL PUEBLO TIENE EL PODER",
-        "titulo": (
-            "EL PUEBLO TIENE EL PODER CUANDO SE COORDINA, ⚠️ NO EN LAS PROMESAS"
-            " DEL GOBIERNO"
-        ),
-        "pilares": [
-            {
-                "numero": "01",
-                "titulo": "SIN DEPENDER DE NADIE",
-                "texto": (
-                    "El poder real no está en un cargo público; nace cuando la"
-                    " gente deja de esperar salvadores y se organiza."
-                ),
-            },
-            {
-                "numero": "02",
-                "titulo": "GRUPO COORDINADO",
-                "texto": (
-                    "Un grupo lo suficientemente grande, unido y con rumbo claro"
-                    " tiene peso real para exigir y mover soluciones."
-                ),
-            },
-            {
-                "numero": "03",
-                "titulo": "CERO PROMESAS FALSAS",
-                "texto": (
-                    "No creemos en discursos vacíos: coordinamos acción ciudadana"
-                    " para que los compromisos se cumplan de verdad."
-                ),
-            },
-        ],
-    },
-    "quienes_somos_bloque": {
-        "badge": "PATRIOTAS POR EL FUTURO",
-        "titulo": "QUIÉNES SOMOS",
-        "cita": (
-            "“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE"
-            " CREEN QUE TIENEN”"
-        ),
-        "descripcion": (
-            "Somos un grupo de patriotas que busca que el país tenga un mejor"
-            " futuro para todos los dominicanos de hoy y el futuro que viene."
-            " Todas las comunidades unidas —desde las juntas de vecinos hasta el"
-            " que vende coco y limpia botas— tienen el poder para protestar por"
-            " lo más mínimo sin que el gobierno haga lo que le plazca."
-        ),
-        "pilares_comunidad": [
-            {
-                "etiqueta": "BARRIO Y COMUNIDAD",
-                "titulo": "JUNTAS DE VECINOS UNIDAS",
-                "texto": (
-                    "Cada calle, sector y comunidad organizada es el primer"
-                    " frente para defender lo justo."
-                ),
-            },
-            {
-                "etiqueta": "TRABAJO DIGNO DE CALLE",
-                "titulo": "DEL QUE VENDE COCO AL LIMPIABOTAS",
-                "texto": (
-                    "La gente trabajadora de todos los días tiene voz, peso y"
-                    " derecho a exigir respeto."
-                ),
-            },
-            {
-                "etiqueta": "FIRMEZA CIUDADANA",
-                "titulo": "PROTESTA POR LO MÍNIMO",
-                "texto": (
-                    "No normalizamos abusos ni caprichos: alzamos la voz unidos"
-                    " para que no se haga lo que plazca."
-                ),
-            },
-        ],
-    },
-    "blog_config": {
-        "titulo_menu": "Blog",
-        "titulo_seccion": "BLOG Y EVENTOS",
-        "descripcion": (
-            "Publicaciones comunitarias administradas por el equipo. Todos los"
-            " usuarios pueden reaccionar a las publicaciones; para comentar o"
-            " enviar mensajes a los administradores, inicia sesión o crea tu"
-            " usuario."
-        ),
-        "noticias_iniciales": [
-            {
-                "id": "noticia-1",
-                "titulo": (
-                    "Juntas de vecinos se coordinan para exigir respuesta en sus"
-                    " sectores"
-                ),
-                "categoria": "Comunidad",
-                "autor": "fafi_admin",
-                "fecha": "Hoy",
-                "imagen": "https://picsum.photos/id/1018/600/350",
-                "contenido": (
-                    "Vecinos y trabajadores de distintos puntos coinciden en que"
-                    " organizarse por barrio y mantener comunicación constante"
-                    " permite defender lo más básico sin esperar promesas"
-                    " vacías."
-                ),
-                "comentarios": [{
-                    "autor": "Juan Pérez",
-                    "texto": (
-                        "Cuando los barrios se ponen de acuerdo de verdad, la voz"
-                        " pesa más."
-                    ),
-                }],
-            },
-            {
-                "id": "noticia-2",
-                "titulo": (
-                    "El valor del trabajo diario y la participación de toda la"
-                    " gente"
-                ),
-                "categoria": "Voz del Pueblo",
-                "autor": "fafi_admin",
-                "fecha": "Ayer",
-                "imagen": "https://picsum.photos/id/1015/600/350",
-                "contenido": (
-                    "Desde el que vende coco y el que limpia botas hasta"
-                    " comerciantes y familias: cada persona que trabaja y"
-                    " aporta tiene derecho a alzar la voz y exigir respeto."
-                ),
-                "comentarios": [],
-            },
-        ],
-    },
-    "mensajes_admin_config": {
-        "titulo_menu": "Mensajes Admin",
-        "titulo_seccion": "MENSAJES A LOS ADMINISTRADORES",
-        "descripcion": (
-            "Si tienes cuenta registrada y hay algún evento importante,"
-            " asamblea comunitaria, protesta o situación urgente en tu sector,"
-            " envíale el detalle a los administradores."
-        ),
-    },
-    "donaciones": {
-        "titulo_menu": "Donaciones",
-        "titulo_seccion": "DONACIONES",
-        "descripcion": (
-            "Con un peso dominicano puedes apoyar a que mañana seamos un mejor"
-            " país, este dinero es usado únicamente con el fin de ayudar a los"
-            " eventos y protestas futuras en cualquier parte del país."
-        ),
-        "texto_boton": "QUIERO DONAR",
-        "cuentas": [
-            {
-                "nombre": "PayPal",
-                "etiqueta": "Cuenta / Enlace PayPal",
-                "dato": "paypal.me/corazonrd",
-            },
-            {
-                "nombre": "Banreservas",
-                "etiqueta": "Cuenta de Ahorros Banreservas",
-                "dato": "960-000000-1 (Corazón RD)",
-            },
-            {
-                "nombre": "Popular",
-                "etiqueta": "Cuenta Banco Popular",
-                "dato": "800-000000-2 (Corazón RD)",
-            },
-            {
-                "nombre": "BHD",
-                "etiqueta": "Cuenta Banco BHD",
-                "dato": "700-000000-3 (Corazón RD)",
-            },
-        ],
-        "mensaje_motivador": (
-            "Un peso suma cuando el pueblo camina junto: hoy es una semilla de"
-            " dignidad, mañana es la fuerza que despierta a un país entero."
-        ),
-    },
-    "logo_url": logo_src,
-    "patron_url": patron_src,
-    "collage_url": collage_src if collage_src else "playa_rd.png",
-    "redes_sociales": {
-        "facebook": "https://www.facebook.com/profile.php?id=61596766414160",
-        "instagram": "https://www.instagram.com/fafirojo12/",
-        "youtube": "https://www.youtube.com/@corazon-rd",
-        "tiktok": "https://www.tiktok.com/@corazonrd",
-    },
-    "secciones": [
-        {
-            "id": "ideales",
-            "titulo_menu": "Ideales",
-            "titulo_seccion": "IDEALES",
-            "subtitulo": "LO QUE DEFENDEMOS EN PALABRAS CLARAS",
-            "descripcion": "",
-            "proyectos": [],
-        },
-        {
-            "id": "protesta",
-            "titulo_menu": "Protesta",
-            "titulo_seccion": "PROTESTA",
-            "subtitulo": "ACCIÓN CIUDADANA ORGANIZADA",
-            "descripcion": (
-                "Expresión visual, denuncia y movilización coordinada para que"
-                " las demandas del pueblo no se ignoren y cada compromiso se"
-                " haga cumplir con hechos. Todos los usuarios pueden reaccionar a"
-                " cada publicación."
-            ),
-            "proyectos": [
-                {
-                    "id": "protesta-1",
-                    "titulo": "Voz Coordinada",
-                    "categoria": "Acción Ciudadana",
-                    "imagen": "https://picsum.photos/id/1025/600/400",
-                },
-                {
-                    "id": "protesta-2",
-                    "titulo": "Que Se Cumpla",
-                    "categoria": "Fiscalización",
-                    "imagen": "https://picsum.photos/id/1024/600/400",
-                },
-            ],
-        },
-        {
-            "id": "quienes-somos",
-            "titulo_menu": "Quiénes Somos",
-            "titulo_seccion": "QUIÉNES SOMOS",
-            "subtitulo": "PATRIOTAS POR UN MEJOR FUTURO",
-            "descripcion": "",
-            "proyectos": [],
-        },
-    ],
-}
-
-MENU_6_BOTONES = [
-    {"id": "ideales", "titulo_menu": "Ideales"},
-    {"id": "protesta", "titulo_menu": "Protesta"},
-    {"id": "quienes-somos", "titulo_menu": "Quiénes Somos"},
-    {"id": "blog", "titulo_menu": CONFIG_PAGINA["blog_config"]["titulo_menu"]},
-    {
-        "id": "mensajes-admin",
-        "titulo_menu": CONFIG_PAGINA["mensajes_admin_config"]["titulo_menu"],
-    },
-    {
-        "id": "donaciones",
-        "titulo_menu": CONFIG_PAGINA["donaciones"]["titulo_menu"],
-    },
-]
-
-
-def render_seccion_boton(boton_id):
-  if boton_id == "ideales":
-    ib = CONFIG_PAGINA["ideales_bloque"]
-    pilares_html = "".join([
-        f"""
-            <div class="pilar-card">
-                <span class="pilar-num">{item['numero']}</span>
-                <h3>{item['titulo']}</h3>
-                <p>{item['texto']}</p>
-            </div>
-            """
-        for item in ib["pilares"]
-    ])
-    return f"""
-        <section id="ideales" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box ideales-box">
-                    <span class="hero-badge">{ib['badge']}</span>
-                    <h2 class="ideales-main-title">{ib['titulo']}</h2>
-
-                    <div class="pilares-grid">
-                        {pilares_html}
-                    </div>
-                </div>
-            </div>
-        </section>
-        """
-
-  if boton_id == "protesta":
-    sec = next(
-        (s for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"), {}
-    )
-    desc_html = (
-        f"<p>{sec['descripcion']}</p>" if sec.get("descripcion") else ""
-    )
-    return f"""
-        <section id="protesta" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box">
-                    <div class="section-header">
-                        <h2>{sec.get('titulo_seccion', 'PROTESTA')}</h2>
-                        {desc_html}
-                    </div>
-                    <div id="barra-admin-protesta" class="admin-protesta-barra">
-                        <button type="button" id="btn-abrir-form-protesta" class="btn btn-donar" aria-expanded="false">+ Subir protesta o mensaje</button>
-
-                        <div id="panel-admin-protesta" class="admin-panel-box admin-protesta-panel">
-                            <h3>Panel de Administración — Subir protesta</h3>
-                            <form id="form-publicar-protesta">
-                                <div class="acceso-fila-dos">
-                                    <div class="campo-grupo">
-                                        <label for="prot-titulo">Título de la protesta</label>
-                                        <input type="text" id="prot-titulo" required maxlength="120" placeholder="Ej. Marcha por el agua potable">
-                                    </div>
-                                    <div class="campo-grupo">
-                                        <label for="prot-categoria">Categoría</label>
-                                        <input type="text" id="prot-categoria" required maxlength="60" placeholder="Ej. Acción Ciudadana">
-                                    </div>
-                                </div>
-
-                                <div class="campo-grupo">
-                                    <label for="prot-mensaje">Mensaje a publicar</label>
-                                    <textarea id="prot-mensaje" required maxlength="3000" placeholder="Escribe aquí el mensaje de la protesta..."></textarea>
-                                </div>
-
-                                <div class="campo-grupo">
-                                    <label for="prot-imagen">Imagen (opcional: súbela desde tu PC/teléfono o pega un enlace)</label>
-                                    <div class="subir-imagen-fila">
-                                        <button type="button" id="btn-prot-subir-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
-                                        <button type="button" id="btn-prot-quitar" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
-                                        <input type="file" id="input-prot-archivo" accept="image/*" style="display:none;">
-                                        <span id="nombre-prot-archivo" style="font-size:0.84rem; color:#ffd166;"></span>
-                                    </div>
-                                    <input type="text" id="prot-imagen" placeholder="O pega aquí un enlace de imagen (https://...)">
-                                    <img id="vista-previa-prot" class="vista-previa-img" alt="Vista previa de la imagen">
-                                </div>
-
-                                <button type="submit" class="btn btn-donar btn-pequeno">Publicar protesta</button>
-                            </form>
-                            <p id="msg-prot-admin" class="mensaje-feedback"></p>
-                        </div>
-                    </div>
-
-                    <div id="protesta-contenedor" class="grid"></div>
-                </div>
-            </div>
-        </section>
-        """
-
-  if boton_id == "quienes-somos":
-    qs = CONFIG_PAGINA["quienes_somos_bloque"]
-    comunidad_html = "".join([
-        f"""
-            <div class="comunidad-card">
-                <span>{item['etiqueta']}</span>
-                <h3>{item['titulo']}</h3>
-                <p>{item['texto']}</p>
-            </div>
-            """
-        for item in qs["pilares_comunidad"]
-    ])
-    return f"""
-        <section id="quienes-somos" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box quienes-somos-box">
-                    <span class="hero-badge">{qs['badge']}</span>
-                    <h2>{qs['titulo']}</h2>
-
-                    <blockquote class="manifiesto-cita">
-                        {qs['cita']}
-                    </blockquote>
-
-                    <p class="quienes-somos-desc">{qs['descripcion']}</p>
-
-                    <div class="comunidad-grid">
-                        {comunidad_html}
-                    </div>
-                </div>
-            </div>
-        </section>
-        """
-
-  if boton_id == "blog":
-    blog = CONFIG_PAGINA["blog_config"]
-    return f"""
-        <section id="blog" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box">
-                    <div class="section-header">
-                        <h2>{blog['titulo_seccion']}</h2>
-                        <p>{blog['descripcion']}</p>
-                    </div>
-
-                    <div id="estado-sesion-blog" class="estado-sesion-banner">
-                        <p id="texto-estado-sesion">Modo visitante: puedes ver y reaccionar a las publicaciones, pero debes iniciar sesión o crear tu usuario para comentar o enviar mensajes.</p>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <button type="button" id="btn-blog-login" class="btn btn-donar btn-pequeno">Iniciar Sesión</button>
-                            <button type="button" id="btn-blog-crear" class="btn btn-pequeno">Crear Usuario</button>
-                        </div>
-                    </div>
-
-                    <div id="panel-admin-blog" class="admin-panel-box">
-                        <h3>Panel de Administración (fafi_admin) — Publicar en el Blog</h3>
-                        <form id="form-publicar-noticia">
-                            <div class="acceso-fila-dos">
-                                <div class="campo-grupo">
-                                    <label for="pub-titulo">Título de la publicación</label>
-                                    <input type="text" id="pub-titulo" required placeholder="Título del evento o noticia...">
-                                </div>
-                                <div class="campo-grupo">
-                                    <label for="pub-categoria">Categoría</label>
-                                    <input type="text" id="pub-categoria" required placeholder="Ej. Movilización, Comunidad...">
-                                </div>
-                            </div>
-
-                            <div class="campo-grupo">
-                                <label for="pub-imagen">Imagen (sube desde tu PC/teléfono o pega URL)</label>
-                                <div class="subir-imagen-fila">
-                                    <button type="button" id="btn-subir-imagen-archivo" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
-                                    <button type="button" id="btn-quitar-pub-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
-                                    <input type="file" id="input-archivo-imagen" accept="image/*" style="display:none;">
-                                    <span id="nombre-archivo-imagen" style="font-size:0.84rem; color:#ffd166;"></span>
-                                </div>
-                                <input type="text" id="pub-imagen" placeholder="O pega aquí un enlace de imagen (opcional)">
-                                <img id="vista-previa-pub-img" class="vista-previa-img" alt="Vista previa de imagen">
-                            </div>
-
-                            <div class="campo-grupo">
-                                <label for="pub-contenido">Contenido</label>
-                                <textarea id="pub-contenido" required placeholder="Escribe el mensaje o anuncio..."></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-donar btn-pequeno">Publicar Noticia</button>
-                        </form>
-                        <p id="msg-pub-admin" class="mensaje-feedback"></p>
-                    </div>
-
-                    <div id="noticias-contenedor" class="noticias-lista"></div>
-                </div>
-            </div>
-        </section>
-        """
-
-  if boton_id == "mensajes-admin":
-    ma = CONFIG_PAGINA["mensajes_admin_config"]
-    return f"""
-        <section id="mensajes-admin" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box">
-                    <div class="section-header">
-                        <h2>{ma['titulo_seccion']}</h2>
-                        <p>{ma['descripcion']}</p>
-                    </div>
-
-                    <div class="admin-msg-box">
-                        <p id="aviso-bloqueo-admin" class="aviso-solo-lectura" style="margin-bottom:14px;"></p>
-                        <form id="form-mensaje-admin">
-                            <div class="acceso-fila-dos">
-                                <div class="campo-grupo">
-                                    <label for="admin-remitente">Tu nombre o usuario</label>
-                                    <input type="text" id="admin-remitente" required placeholder="Ej. Juan / @voz_barrio">
-                                </div>
-                                <div class="campo-grupo">
-                                    <label for="admin-tipo-evento">Tipo de evento o aviso</label>
-                                    <select id="admin-tipo-evento">
-                                        <option value="Evento Importante">Evento Importante</option>
-                                        <option value="Asamblea Comunitaria">Asamblea Comunitaria</option>
-                                        <option value="Movilización / Protesta">Movilización / Protesta</option>
-                                        <option value="Reporte de Barrio">Reporte de Barrio</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="acceso-fila-dos">
-                                <div class="campo-grupo">
-                                    <label for="admin-sector">Comunidad, junta de vecinos o lugar</label>
-                                    <input type="text" id="admin-sector" required placeholder="Ej. Sector Pueblo Nuevo, Junta de Vecinos...">
-                                </div>
-                                <div class="campo-grupo">
-                                    <label for="admin-asunto">Asunto del evento</label>
-                                    <input type="text" id="admin-asunto" required placeholder="Título o motivo principal...">
-                                </div>
-                            </div>
-
-                            <div class="campo-grupo">
-                                <label>Foto o evidencia (opcional — desde PC o teléfono)</label>
-                                <div class="subir-imagen-fila">
-                                    <button type="button" id="btn-subir-admin-img" class="btn btn-pequeno">Subir imagen desde PC o teléfono</button>
-                                    <button type="button" id="btn-quitar-admin-img" class="btn btn-pequeno" style="display:none;">Quitar imagen</button>
-                                    <input type="file" id="input-archivo-admin-img" accept="image/*" style="display:none;">
-                                    <span id="nombre-archivo-admin-img" style="font-size:0.84rem; color:#ffd166;"></span>
-                                </div>
-                                <img id="vista-previa-admin-img" class="vista-previa-img" alt="Vista previa adjunto para administradores">
-                            </div>
-
-                            <div class="campo-grupo">
-                                <label for="admin-detalle">Detalles del evento (fecha, hora, lugar y qué pasa)</label>
-                                <textarea id="admin-detalle" required placeholder="Explica los detalles para que los administradores revisen y publiquen el evento..."></textarea>
-                            </div>
-
-                            <button type="submit" id="btn-enviar-admin" class="btn btn-donar">Enviar Mensaje a Administradores</button>
-                        </form>
-                        <p id="msg-admin-feedback" class="mensaje-feedback"></p>
-                    </div>
-
-                    <div id="historial-mensajes-admin" class="admin-msg-historial"></div>
-                </div>
-            </div>
-        </section>
-        """
-
-  if boton_id == "donaciones":
-    don = CONFIG_PAGINA["donaciones"]
-    cuentas_html = "".join([
-        f"""
-            <div class="cuenta-tarjeta">
-                <span class="cuenta-banco">{c['nombre']}</span>
-                <p class="cuenta-etiqueta">{c['etiqueta']}</p>
-                <p class="cuenta-numero">{c['dato']}</p>
-                <button type="button" class="btn btn-pequeno btn-copiar-cuenta" data-copiar="{c['nombre']}: {c['dato']}">Copiar</button>
-            </div>
-            """
-        for c in don["cuentas"]
-    ])
-    return f"""
-        <section id="donaciones" class="section">
-            <div style="padding: 0 50px;">
-                <div class="content-box">
-                    <div class="section-header">
-                        <h2>{don['titulo_seccion']}</h2>
-                        <p>{don['descripcion']}</p>
-                    </div>
-
-                    <div class="donacion-accion-area">
-                        <button type="button" class="btn btn-donar" id="btn-quiero-donar" aria-expanded="false" aria-controls="panel-cuentas-donacion">
-                            {don['texto_boton']}
-                        </button>
-
-                        <div id="panel-cuentas-donacion" class="cuentas-desplegable" style="display:none;">
-                            {cuentas_html}
-                        </div>
-                    </div>
-
-                    <p class="mensaje-motivador-donacion">
-                        {don['mensaje_motivador']}
-                    </p>
-                </div>
-            </div>
-        </section>
-        """
-
-  return ""
-
-
-MENU_6_BOTONES_HTML = "".join([
-    f'<li><a href="#{b["id"]}" data-menu-id="{b["id"]}">{b["titulo_menu"]}</a></li>'
-    for b in MENU_6_BOTONES
-])
-
-SECCIONES_6_BOTONES_HTML = "".join(
-    [render_seccion_boton(b["id"]) for b in MENU_6_BOTONES]
-)
-
-PROTESTAS_INICIALES = next(
-    (s["proyectos"] for s in CONFIG_PAGINA["secciones"] if s["id"] == "protesta"),
-    [],
-)
-
-DATOS_JS = json.dumps(
-    {
-        "adminDefecto": CONFIG_PAGINA["admin_defecto"],
-        "noticiasDefecto": CONFIG_PAGINA["blog_config"]["noticias_iniciales"],
-        "protestasDefecto": PROTESTAS_INICIALES,
-        "menu6Ids": [b["id"] for b in MENU_6_BOTONES],
-        "patronUrl": CONFIG_PAGINA["patron_url"],
-    },
-    ensure_ascii=False,
-)
-
-HERO_MEDIA_HTML = VIDEO_HERO_HTML or (
-    f'<img src="{CONFIG_PAGINA["collage_url"]}" alt="Playas de República Dominicana">'
-)
-
-HTML_TEMPLATE = f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{CONFIG_PAGINA['nombre_empresa']}</title>
-    <link rel="stylesheet" href="recursos/estilos.css?v=10">
-</head>
-<body>
-
-    <header class="barra-movil" id="barra-movil">
-        <a href="#inicio" class="logo-barra-movil" aria-label="Regresar al inicio">
-            <img id="logo-barra-movil" alt="Corazón Dominicano Tropical">
-        </a>
-    </header>
-
-    <button type="button" class="btn-menu-movil" id="btn-menu-movil" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-principal-6">
-        <span class="raya"></span>
-        <span class="raya"></span>
-        <span class="raya"></span>
-    </button>
-
-    <div class="top-left-auth" id="barra-acceso" aria-label="Acceso de usuario">
-        <button type="button" class="btn-auth-movil" id="btn-auth-movil" aria-label="Abrir acceso de usuario" aria-expanded="false">
-            <svg class="icono-usuario" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5z"/></svg>
-            <svg class="icono-cerrar" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-        <div class="acceso-panel">
-            <span id="badge-usuario-activo" class="usuario-badge" style="display:none;"></span>
-            <button type="button" class="btn btn-donar btn-pequeno" id="btn-top-login">Iniciar Sesión</button>
-            <button type="button" class="btn btn-pequeno" id="btn-top-crear">Crear Usuario</button>
-            <button type="button" class="btn btn-pequeno" id="btn-top-cerrar" style="display:none;">Cerrar Sesión</button>
-        </div>
-    </div>
-
-    <div id="modal-login" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-login">
-        <div class="modal-ventana">
-            <button type="button" class="modal-cerrar" data-cerrar-modal="modal-login" aria-label="Cerrar ventana">×</button>
-            <h3 id="titulo-modal-login">Iniciar Sesión</h3>
-            <p class="acceso-lema">Entra con tu cédula y tu contraseña para comentar y enviar mensajes a los administradores.</p>
-            <form id="form-login-usuario">
-                <div class="campo-grupo">
-                    <label for="login-usuario">Cédula</label>
-                    <input type="text" id="login-usuario" required placeholder="000-0000000-0" maxlength="40" autocomplete="username">
-                </div>
-                <div class="campo-grupo">
-                    <label for="login-password">Contraseña</label>
-                    <input type="password" id="login-password" required placeholder="Tu contraseña">
-                </div>
-                <button type="submit" class="btn btn-donar">Entrar</button>
-            </form>
-            <p id="msg-login" class="mensaje-feedback"></p>
-        </div>
-    </div>
-
-    <div id="modal-crear-usuario" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-crear">
-        <div class="modal-ventana">
-            <button type="button" class="modal-cerrar" data-cerrar-modal="modal-crear-usuario" aria-label="Cerrar ventana">×</button>
-            <h3 id="titulo-modal-crear">Crear Usuario</h3>
-            <p class="acceso-lema">“SI LOS DE ABAJOS NOS UNIMOS, LOS DE ARRIBA PIERDEN EL CONTROL QUE CREEN QUE TIENEN”</p>
-            <form id="form-registro-usuario">
-                <div class="campo-grupo">
-                    <label for="reg-cedula">Cédula</label>
-                    <input type="text" id="reg-cedula" required placeholder="000-0000000-0" inputmode="numeric" maxlength="13" autocomplete="off">
-                </div>
-
-                <div class="campo-grupo">
-                    <label for="reg-nombre">Nombre completo</label>
-                    <input type="text" id="reg-nombre" required placeholder="Nombre y apellidos" autocomplete="name">
-                </div>
-
-                <div class="acceso-fila-dos">
-                    <div class="campo-grupo">
-                        <label for="reg-usuario">Nombre de usuario</label>
-                        <input type="text" id="reg-usuario" required placeholder="Ej. voz_del_barrio">
-                    </div>
-                    <div class="campo-grupo">
-                        <label for="reg-comunidad">Junta de vecinos, sector o oficio</label>
-                        <input type="text" id="reg-comunidad" required placeholder="Ej. Junta de vecinos, vendedor de coco...">
-                    </div>
-                </div>
-
-                <div class="campo-grupo">
-                    <label for="reg-email">Correo electrónico</label>
-                    <input type="email" id="reg-email" required placeholder="correo@ejemplo.com">
-                </div>
-
-                <div class="acceso-fila-dos">
-                    <div class="campo-grupo">
-                        <label for="reg-password">Contraseña</label>
-                        <input type="password" id="reg-password" required placeholder="Crea una contraseña">
-                    </div>
-                    <div class="campo-grupo">
-                        <label for="reg-confirmar-password">Confirmar contraseña</label>
-                        <input type="password" id="reg-confirmar-password" required placeholder="Repite tu contraseña">
-                    </div>
-                </div>
-
-                <label class="campo-terminos" for="reg-terminos">
-                    <input type="checkbox" id="reg-terminos" required>
-                    <span>Acepto todos los términos y políticas de esta página</span>
-                </label>
-
-                <button type="submit" class="btn btn-donar">Crear Usuario</button>
-            </form>
-            <p id="msg-registro" class="mensaje-feedback"></p>
-        </div>
-    </div>
-
-    <div class="main-content">
-        <section id="inicio" class="hero">
-            <div class="collage-container">
-                {HERO_MEDIA_HTML}
-            </div>
-
-            <div class="hero-text-area">
-                <div class="content-box">
-                    <h1>{CONFIG_PAGINA['slogan_principal']}</h1>
-                    <p>{CONFIG_PAGINA['descripcion_hero']}</p>
-                    <div class="hero-actions">
-                        <a href="#mensajes-admin" class="btn btn-donar">Avisar Evento a Admin</a>
-                        <a href="#blog" class="btn">Ir al Blog</a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        {SECCIONES_6_BOTONES_HTML}
-    </div>
-
-    <div class="ticker-inferior" aria-label="Mensaje ciudadano en movimiento">
-        <div class="ticker-pista">
-            <div class="ticker-frase">
-                🔥 EL PUEBLO UNIDO!!! <span class="resalte-alerta">•</span> UN GOBIERNO DE RODILLAS 🔥
-            </div>
-        </div>
-    </div>
-
-    <aside class="sidebar-border"></aside>
-
-    <aside class="sidebar">
-        <div class="sidebar-logo">
-            <a href="#inicio" class="btn-inicio-img" title="Regresar al inicio" aria-label="Regresar al inicio">
-                <img src="{CONFIG_PAGINA['logo_url']}" alt="Corazón Dominicano Tropical - Ir al inicio">
-            </a>
-        </div>
-
-        <ul class="sidebar-nav" id="menu-principal-6">
-            {MENU_6_BOTONES_HTML}
-        </ul>
-
-        <div class="sidebar-socials">
-            <a href="{CONFIG_PAGINA['redes_sociales']['facebook']}" target="_blank" rel="noopener noreferrer" title="Facebook" aria-label="Facebook de Corazón RD">
-                <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-            </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['instagram']}" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram de Corazón RD">
-                <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-            </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['youtube']}" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="YouTube de Corazón RD">
-                <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-            </a>
-            <a href="{CONFIG_PAGINA['redes_sociales']['tiktok']}" target="_blank" rel="noopener noreferrer" title="TikTok" aria-label="TikTok de Corazón RD">
-                <svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
-            </a>
-        </div>
-    </aside>
-
-    <script>
-        window.CORAZON_RD_DATOS = {DATOS_JS};
-    </script>
-    <script src="recursos/app_logica.js?v=10"></script>
-</body>
-</html>
-"""
-
-
-EXTENSIONES_PUBLICAS = (
-    ".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico",
-    ".woff", ".woff2", ".ttf",
-)
-INTENTOS_ADMIN = {}
-LIMITE_INTENTOS_ADMIN = 5
-VENTANA_INTENTOS_SEG = 600
-LIMITE_GLOBAL_ADMIN = 30
-
-
-class ManejadorCorazonRD(http.server.SimpleHTTPRequestHandler):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, directory=".", **kwargs)
-
-  # --- Solo se entregan estilos, scripts e imágenes: nunca app.py, claves ni carpetas ---
-  def ruta_publica(self, ruta):
-    ruta = urllib.parse.unquote(ruta)
-    if ".." in ruta or "\\" in ruta or ruta.endswith("/"):
-      return False
-    partes = [parte for parte in ruta.split("/") if parte]
-    if not partes or any(parte.startswith(".") for parte in partes):
-      return False
-    return os.path.splitext(partes[-1])[1].lower() in EXTENSIONES_PUBLICAS
-
-  def do_HEAD(self):
-    ruta_limpia = self.path.split("?")[0]
-    if ruta_limpia in ("", "/", "/index.html") or self.ruta_publica(ruta_limpia):
-      return super().do_HEAD()
-    self.send_error(404, "No encontrado")
-
-  def do_GET(self):
-    ruta_limpia = self.path.split("?")[0]
-    if ruta_limpia in ("", "/", "/index.html"):
-      cuerpo = HTML_TEMPLATE.encode("utf-8")
-      self.send_response(200)
-      self.send_header("Content-Type", "text/html; charset=utf-8")
-      self.send_header("Content-Length", str(len(cuerpo)))
-      self.end_headers()
-      self.wfile.write(cuerpo)
-      return
-    if ruta_limpia == "/video-principal" and VIDEO_RUTA:
-      self.servir_video()
-      return
-    if not self.ruta_publica(ruta_limpia):
-      self.send_error(404, "No encontrado")
-      return
-    return super().do_GET()
-
-  # --- Acceso del administrador: la clave se valida aquí, en el servidor ---
-  def responder_json(self, codigo, datos):
-    cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
-    self.send_response(codigo)
-    self.send_header("Content-Type", "application/json; charset=utf-8")
-    self.send_header("Content-Length", str(len(cuerpo)))
-    self.send_header("Cache-Control", "no-store")
-    self.end_headers()
-    self.wfile.write(cuerpo)
-
-  def ip_cliente(self):
-    reenviada = self.headers.get("X-Forwarded-For", "")
-    if reenviada:
-      return reenviada.split(",")[-1].strip()
-    return self.client_address[0]
-
-  def do_POST(self):
-    if self.path.split("?")[0] != "/api/admin-login":
-      self.send_error(404, "No encontrado")
-      return
-
-    if not CLAVE_ADMIN:
-      self.responder_json(503, {"ok": False, "error": "admin_no_configurado"})
-      return
-
-    ahora = time.time()
-    ip = self.ip_cliente()
-    for clave_ip in list(INTENTOS_ADMIN):
-      INTENTOS_ADMIN[clave_ip] = [t for t in INTENTOS_ADMIN[clave_ip] if ahora - t < VENTANA_INTENTOS_SEG]
-      if not INTENTOS_ADMIN[clave_ip]:
-        del INTENTOS_ADMIN[clave_ip]
-    fallos_ip = len(INTENTOS_ADMIN.get(ip, []))
-    fallos_total = sum(len(v) for v in INTENTOS_ADMIN.values())
-    if fallos_ip >= LIMITE_INTENTOS_ADMIN or fallos_total >= LIMITE_GLOBAL_ADMIN:
-      self.responder_json(429, {"ok": False, "error": "demasiados_intentos"})
-      return
-
-    try:
-      largo = int(self.headers.get("Content-Length", "0"))
-      if largo <= 0 or largo > 2048:
-        raise ValueError
-      datos = json.loads(self.rfile.read(largo).decode("utf-8"))
-      usuario = str(datos.get("usuario", "")).strip().lower()
-      clave = str(datos.get("password", ""))
-    except (ValueError, UnicodeDecodeError, AttributeError):
-      self.responder_json(400, {"ok": False, "error": "solicitud_invalida"})
-      return
-
-    usuario_ok = hmac.compare_digest(usuario.encode("utf-8"), USUARIO_ADMIN.lower().encode("utf-8"))
-    clave_ok = hmac.compare_digest(clave.encode("utf-8"), CLAVE_ADMIN.encode("utf-8"))
-    if usuario_ok and clave_ok:
-      INTENTOS_ADMIN.pop(ip, None)
-      self.responder_json(200, {"ok": True, "usuario": USUARIO_ADMIN})
-      return
-
-    INTENTOS_ADMIN.setdefault(ip, []).append(ahora)
-    self.responder_json(401, {"ok": False, "error": "credenciales"})
-
-  def servir_video(self):
-    try:
-      tamano = os.path.getsize(VIDEO_RUTA)
-    except OSError:
-      self.send_error(404, "Video no encontrado")
-      return
-
-    inicio, fin, parcial = 0, tamano - 1, False
-    rango = self.headers.get("Range", "")
-    if rango.startswith("bytes="):
-      try:
-        desde, _, hasta = rango[6:].partition("-")
-        if desde == "":
-          inicio = max(tamano - int(hasta), 0)
-        else:
-          inicio = int(desde)
-          if hasta:
-            fin = min(int(hasta), tamano - 1)
-        parcial = True
-      except ValueError:
-        inicio, fin, parcial = 0, tamano - 1, False
-      if parcial and (inicio > fin or inicio >= tamano):
-        self.send_response(416)
-        self.send_header("Content-Range", f"bytes */{tamano}")
-        self.end_headers()
-        return
-
-    longitud = fin - inicio + 1
-    self.send_response(206 if parcial else 200)
-    self.send_header("Content-Type", VIDEO_MIME)
-    self.send_header("Accept-Ranges", "bytes")
-    self.send_header("Content-Length", str(longitud))
-    if parcial:
-      self.send_header("Content-Range", f"bytes {inicio}-{fin}/{tamano}")
-    self.send_header("Cache-Control", "public, max-age=3600")
-    self.end_headers()
-
-    try:
-      with open(VIDEO_RUTA, "rb") as archivo:
-        archivo.seek(inicio)
-        restante = longitud
-        while restante > 0:
-          bloque = archivo.read(min(65536, restante))
-          if not bloque:
-            break
-          self.wfile.write(bloque)
-          restante -= len(bloque)
-    except (BrokenPipeError, ConnectionResetError):
-      pass
-
-  def log_message(self, format, *args):
-    sys.stderr.write(f"[CorazonRD] {self.address_string()} - {format % args}\n")
-
-
-class ServidorReutilizable(socketserver.ThreadingMixIn, http.server.HTTPServer):
-  allow_reuse_address = True
-  daemon_threads = True
-
-
-def abrir_navegador_local(url):
-  if not os.environ.get("RENDER"):
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-
-
-if __name__ == "__main__":
-  puerto = int(os.environ.get("PORT", 8000))
-  host = "0.0.0.0"
-  servidor = ServidorReutilizable((host, puerto), ManejadorCorazonRD)
-  print(f"Servidor CORAZÓN RD escuchando en http://{host}:{puerto}", flush=True)
-  if not CLAVE_ADMIN:
-    print(
-        "AVISO: no hay clave de administrador. Pon el archivo datos_administrador.json junto "
-        "a app.py (o define FAFI_ADMIN_PASSWORD) para poder entrar como admin.",
-        flush=True,
-    )
-  abrir_navegador_local(f"http://127.0.0.1:{puerto}")
-  try:
-    servidor.serve_forever()
-  except KeyboardInterrupt:
-    print("\nServidor detenido.", flush=True)
-  finally:
-    servidor.server_close()
+  function leer(clave, defecto) {
+    try {
+      var v = localStorage.getItem(PREFIJO + clave);
+      return v ? JSON.parse(v) : defecto;
+    } catch (e) { return defecto; }
+  }
+
+  function guardar(clave, valor) {
+    try { localStorage.setItem(PREFIJO + clave, JSON.stringify(valor)); return true; }
+    catch (e) { return false; }
+  }
+
+  function clonar(x) { return JSON.parse(JSON.stringify(x)); }
+
+  function nuevoId(prefijo) {
+    return prefijo + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function fechaHoy() {
+    try {
+      return new Date().toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
+    } catch (e) { return new Date().toLocaleDateString(); }
+  }
+
+  function mensaje(nodo, texto, bien) {
+    if (!nodo) return;
+    nodo.textContent = texto || "";
+    nodo.style.color = bien === false ? "#ff8a8a" : "";
+  }
+
+  function hash(texto) {
+    if (window.crypto && window.crypto.subtle && window.TextEncoder) {
+      return window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto)).then(function (buf) {
+        return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+          return ("0" + b.toString(16)).slice(-2);
+        }).join("");
+      });
+    }
+    return Promise.resolve("plano:" + btoa(unescape(encodeURIComponent(texto))));
+  }
+
+  function soloDigitos(t) { return String(t || "").replace(/\D/g, ""); }
+
+  function formatearCedula(valor) {
+    var d = soloDigitos(valor).slice(0, 11);
+    var r = d.slice(0, 3);
+    if (d.length > 3) r += "-" + d.slice(3, 10);
+    if (d.length > 10) r += "-" + d.slice(10);
+    return r;
+  }
+
+  /* ---------- sesión ---------- */
+  function getSesion() {
+    try {
+      var a = sessionStorage.getItem(PREFIJO + "admin");
+      if (a) return JSON.parse(a);
+    } catch (e) { /* ignorar */ }
+    return leer("sesion", null);
+  }
+
+  function esAdmin() {
+    var s = getSesion();
+    return !!(s && s.rol === "admin");
+  }
+
+  /* ---------- menú móvil (tres rayas) ---------- */
+  var btnMenu = $("btn-menu-movil");
+  var contAuth = $("barra-acceso");
+  var btnAuth = $("btn-auth-movil");
+
+  function setMenu(abierto) {
+    document.body.classList.toggle("menu-abierto", abierto);
+    if (btnMenu) {
+      btnMenu.setAttribute("aria-expanded", abierto ? "true" : "false");
+      btnMenu.setAttribute("aria-label", abierto ? "Cerrar menú" : "Abrir menú");
+    }
+    if (abierto) setPanelAuth(false);
+  }
+
+  function setPanelAuth(abierto) {
+    if (!contAuth) return;
+    contAuth.classList.toggle("abierto", abierto);
+    if (btnAuth) {
+      btnAuth.setAttribute("aria-expanded", abierto ? "true" : "false");
+      btnAuth.setAttribute("aria-label", abierto ? "Cerrar acceso de usuario" : "Abrir acceso de usuario");
+    }
+  }
+
+  if (btnMenu) {
+    btnMenu.addEventListener("click", function () {
+      setMenu(!document.body.classList.contains("menu-abierto"));
+    });
+  }
+
+  Array.prototype.forEach.call(
+    document.querySelectorAll("#menu-principal-6 a, .btn-inicio-img, .logo-barra-movil"),
+    function (a) { a.addEventListener("click", function () { setMenu(false); }); }
+  );
+
+  window.addEventListener("resize", function () {
+    if (window.innerWidth > 768) setMenu(false);
+  });
+
+  /* logo de la barra negra del teléfono = logo del menú lateral */
+  (function () {
+    var destino = $("logo-barra-movil");
+    var origen = document.querySelector(".sidebar-logo img");
+    if (destino && origen && origen.getAttribute("src")) destino.src = origen.getAttribute("src");
+  })();
+
+  /* ---------- icono de usuario (PC y teléfono) ---------- */
+  if (btnAuth) {
+    btnAuth.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setPanelAuth(!contAuth.classList.contains("abierto"));
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    if (contAuth && contAuth.classList.contains("abierto") && !contAuth.contains(e.target)) {
+      setPanelAuth(false);
+    }
+  });
+
+  /* ---------- ventanas (modales) ---------- */
+  function abrirModal(id) {
+    Array.prototype.forEach.call(document.querySelectorAll(".modal-overlay.abierto"), function (m) {
+      m.classList.remove("abierto");
+    });
+    var modal = $(id);
+    if (!modal) return;
+    modal.classList.add("abierto");
+    document.body.style.overflow = "hidden";
+    setPanelAuth(false);
+    setMenu(false);
+    var primero = modal.querySelector("input");
+    if (primero) setTimeout(function () { primero.focus(); }, 50);
+  }
+
+  function cerrarModales() {
+    Array.prototype.forEach.call(document.querySelectorAll(".modal-overlay.abierto"), function (m) {
+      m.classList.remove("abierto");
+    });
+    document.body.style.overflow = "";
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cerrar-modal]"), function (b) {
+    b.addEventListener("click", cerrarModales);
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".modal-overlay"), function (m) {
+    m.addEventListener("click", function (e) { if (e.target === m) cerrarModales(); });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { cerrarModales(); setMenu(false); setPanelAuth(false); }
+  });
+
+  function abrirLogin() { mensaje($("msg-login"), ""); abrirModal("modal-login"); }
+  function abrirRegistro() { mensaje($("msg-registro"), ""); abrirModal("modal-crear-usuario"); }
+
+  [["btn-top-login", abrirLogin], ["btn-blog-login", abrirLogin],
+   ["btn-top-crear", abrirRegistro], ["btn-blog-crear", abrirRegistro]].forEach(function (par) {
+    var b = $(par[0]);
+    if (b) b.addEventListener("click", par[1]);
+  });
+
+  var btnCerrarSesion = $("btn-top-cerrar");
+  if (btnCerrarSesion) {
+    btnCerrarSesion.addEventListener("click", function () {
+      try { sessionStorage.removeItem(PREFIJO + "admin"); } catch (e) { /* ignorar */ }
+      try { localStorage.removeItem(PREFIJO + "sesion"); } catch (e) { /* ignorar */ }
+      setPanelAuth(false);
+      actualizarSesion();
+    });
+  }
+
+  /* ---------- máscara de cédula ---------- */
+  var campoRegCedula = $("reg-cedula");
+  if (campoRegCedula) {
+    campoRegCedula.addEventListener("input", function () {
+      campoRegCedula.value = formatearCedula(campoRegCedula.value);
+    });
+  }
+
+  var campoLogin = $("login-usuario");
+  if (campoLogin) {
+    campoLogin.addEventListener("input", function () {
+      if (/^[\d-]*$/.test(campoLogin.value)) campoLogin.value = formatearCedula(campoLogin.value);
+    });
+  }
+
+  /* ---------- login ---------- */
+  function iniciarSesionAdmin(usuario, clave) {
+    return fetch("/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: usuario, password: clave })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        return { estado: r.status, datos: d };
+      });
+    });
+  }
+
+  var formLogin = $("form-login-usuario");
+  if (formLogin) {
+    formLogin.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = $("msg-login");
+      var entrada = $("login-usuario").value.trim();
+      var clave = $("login-password").value;
+      var boton = formLogin.querySelector("button[type=submit]");
+      var nombreAdmin = String((DATOS.adminDefecto && DATOS.adminDefecto.usuario) || "").toLowerCase();
+
+      if (!entrada || !clave) { mensaje(msg, "Escribe tu cédula y tu contraseña.", false); return; }
+      if (boton) boton.disabled = true;
+      mensaje(msg, "Verificando...");
+
+      var fin = function () { if (boton) boton.disabled = false; };
+
+      /* administrador: se valida en el servidor */
+      if (nombreAdmin && entrada.toLowerCase() === nombreAdmin) {
+        iniciarSesionAdmin(entrada, clave).then(function (res) {
+          if (res.estado === 200 && res.datos.ok) {
+            var ses = {
+              rol: "admin",
+              usuario: res.datos.usuario || entrada,
+              comunidad: (DATOS.adminDefecto && DATOS.adminDefecto.comunidad) || ""
+            };
+            try { sessionStorage.setItem(PREFIJO + "admin", JSON.stringify(ses)); } catch (err) { /* ignorar */ }
+            formLogin.reset();
+            mensaje(msg, "");
+            cerrarModales();
+            actualizarSesion();
+          } else if (res.estado === 429) {
+            mensaje(msg, "Demasiados intentos. Espera unos minutos.", false);
+          } else if (res.estado === 503) {
+            mensaje(msg, "El administrador aún no está configurado en el servidor.", false);
+          } else {
+            mensaje(msg, "Usuario o contraseña incorrectos.", false);
+          }
+        }).catch(function () {
+          mensaje(msg, "No se pudo conectar con el servidor.", false);
+        }).then(fin);
+        return;
+      }
+
+      /* usuario normal: cédula + contraseña */
+      var cedula = soloDigitos(entrada);
+      var usuarios = leer("usuarios", []);
+      var encontrado = null;
+      for (var i = 0; i < usuarios.length; i++) {
+        if (usuarios[i].cedula === cedula) { encontrado = usuarios[i]; break; }
+      }
+      if (!encontrado) {
+        mensaje(msg, "Esa cédula no está registrada. Crea tu usuario primero.", false);
+        fin();
+        return;
+      }
+      hash(cedula + ":" + clave).then(function (h) {
+        if (h !== encontrado.clave) {
+          mensaje(msg, "Cédula o contraseña incorrectos.", false);
+          return;
+        }
+        guardar("sesion", {
+          rol: "usuario",
+          cedula: encontrado.cedula,
+          usuario: encontrado.usuario,
+          nombre: encontrado.nombre,
+          comunidad: encontrado.comunidad
+        });
+        formLogin.reset();
+        mensaje(msg, "");
+        cerrarModales();
+        actualizarSesion();
+      }).then(fin, fin);
+    });
+  }
+
+  /* ---------- registro ---------- */
+  var formRegistro = $("form-registro-usuario");
+  if (formRegistro) {
+    formRegistro.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = $("msg-registro");
+      var cedula = soloDigitos($("reg-cedula").value);
+      var nombre = $("reg-nombre").value.trim();
+      var usuario = $("reg-usuario").value.trim();
+      var comunidad = $("reg-comunidad").value.trim();
+      var correo = $("reg-email").value.trim();
+      var clave = $("reg-password").value;
+      var confirmar = $("reg-confirmar-password").value;
+
+      if (cedula.length !== 11) { mensaje(msg, "La cédula debe tener 11 dígitos.", false); return; }
+      if (nombre.split(/\s+/).length < 2) { mensaje(msg, "Escribe tu nombre completo (nombre y apellido).", false); return; }
+      if (clave.length < 6) { mensaje(msg, "La contraseña debe tener al menos 6 caracteres.", false); return; }
+      if (clave !== confirmar) { mensaje(msg, "Las contraseñas no coinciden.", false); return; }
+      if (!$("reg-terminos").checked) { mensaje(msg, "Debes aceptar los términos y políticas.", false); return; }
+
+      var adminNombre = String((DATOS.adminDefecto && DATOS.adminDefecto.usuario) || "").toLowerCase();
+      if (usuario.toLowerCase() === adminNombre) { mensaje(msg, "Ese nombre de usuario no está disponible.", false); return; }
+
+      var usuarios = leer("usuarios", []);
+      for (var i = 0; i < usuarios.length; i++) {
+        if (usuarios[i].cedula === cedula) { mensaje(msg, "Esa cédula ya tiene un usuario creado.", false); return; }
+        if (usuarios[i].usuario.toLowerCase() === usuario.toLowerCase()) { mensaje(msg, "Ese nombre de usuario ya existe.", false); return; }
+      }
+
+      hash(cedula + ":" + clave).then(function (h) {
+        usuarios.push({
+          cedula: cedula, nombre: nombre, usuario: usuario,
+          comunidad: comunidad, email: correo, clave: h, creado: Date.now()
+        });
+        if (!guardar("usuarios", usuarios)) {
+          mensaje(msg, "No se pudo guardar el usuario en este navegador.", false);
+          return;
+        }
+        guardar("sesion", { rol: "usuario", cedula: cedula, usuario: usuario, nombre: nombre, comunidad: comunidad });
+        formRegistro.reset();
+        mensaje(msg, "");
+        cerrarModales();
+        actualizarSesion();
+      });
+    });
+  }
+
+  /* ---------- subir imágenes (PC o teléfono) ---------- */
+  function reducirImagen(archivo, callback) {
+    var lector = new FileReader();
+    lector.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 900;
+        var ratio = Math.min(1, max / Math.max(img.width, img.height));
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        callback(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = function () { callback(""); };
+      img.src = lector.result;
+    };
+    lector.onerror = function () { callback(""); };
+    lector.readAsDataURL(archivo);
+  }
+
+  function configurarImagen(cfg) {
+    var estado = { dataUrl: "" };
+    var btn = $(cfg.btn), quitar = $(cfg.quitar), input = $(cfg.input);
+    var nombre = $(cfg.nombre), previa = $(cfg.previa), url = cfg.url ? $(cfg.url) : null;
+
+    function mostrar(src) {
+      if (!previa) return;
+      if (src) { previa.src = src; previa.classList.add("visible"); }
+      else { previa.removeAttribute("src"); previa.classList.remove("visible"); }
+    }
+
+    if (btn && input) btn.addEventListener("click", function () { input.click(); });
+    if (input) {
+      input.addEventListener("change", function () {
+        var archivo = input.files && input.files[0];
+        if (!archivo) return;
+        reducirImagen(archivo, function (data) {
+          if (!data) return;
+          estado.dataUrl = data;
+          if (nombre) nombre.textContent = archivo.name;
+          if (quitar) quitar.style.display = "";
+          mostrar(data);
+        });
+      });
+    }
+    if (quitar) {
+      quitar.addEventListener("click", function () { estado.reset(); });
+    }
+    if (url) {
+      url.addEventListener("input", function () {
+        if (!estado.dataUrl) mostrar(/^https?:\/\//i.test(url.value.trim()) ? url.value.trim() : "");
+      });
+    }
+
+    estado.valor = function () {
+      return estado.dataUrl || (url ? url.value.trim() : "");
+    };
+    estado.reset = function () {
+      estado.dataUrl = "";
+      if (input) input.value = "";
+      if (nombre) nombre.textContent = "";
+      if (quitar) quitar.style.display = "none";
+      if (url) url.value = "";
+      mostrar("");
+    };
+    return estado;
+  }
+
+  /* ---------- reacciones ---------- */
+  function crearReacciones(item, alCambiar) {
+    var mias = leer("mis_reacciones", {});
+    if (!item.reacciones) item.reacciones = {};
+
+    var bloque = el("div", "reacciones-bloque");
+    var fila = el("div", "reacciones-fila-principal");
+    var principal = el("button", "btn-reaccion-principal");
+    principal.type = "button";
+    var emojiPrincipal = el("span", "emoji-principal", "👍");
+    var cantidadPrincipal = el("span", "cantidad-principal", "0");
+    principal.appendChild(emojiPrincipal);
+    principal.appendChild(cantidadPrincipal);
+    fila.appendChild(principal);
+
+    var desplegable = el("div", "reacciones-desplegable");
+    var botones = {};
+
+    REACCIONES.forEach(function (emoji) {
+      var b = el("button", "btn-reaccion-opcion");
+      b.type = "button";
+      b.appendChild(el("span", "reaccion-emoji", emoji));
+      var contador = el("span", "reaccion-contador", "0");
+      b.appendChild(contador);
+      b._contador = contador;
+      botones[emoji] = b;
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var actual = mias[item.id];
+        if (actual) item.reacciones[actual] = Math.max(0, (item.reacciones[actual] || 1) - 1);
+        if (actual === emoji) { delete mias[item.id]; }
+        else { item.reacciones[emoji] = (item.reacciones[emoji] || 0) + 1; mias[item.id] = emoji; }
+        guardar("mis_reacciones", mias);
+        alCambiar();
+        pintar();
+        bloque.classList.remove("abierto");
+      });
+      desplegable.appendChild(b);
+    });
+
+    function pintar() {
+      var total = 0;
+      REACCIONES.forEach(function (emoji) {
+        var n = item.reacciones[emoji] || 0;
+        total += n;
+        botones[emoji]._contador.textContent = String(n);
+        botones[emoji].classList.toggle("activa", mias[item.id] === emoji);
+      });
+      emojiPrincipal.textContent = mias[item.id] || "👍";
+      cantidadPrincipal.textContent = String(total);
+      principal.classList.toggle("activa", !!mias[item.id]);
+    }
+
+    principal.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      bloque.classList.toggle("abierto");
+    });
+    document.addEventListener("click", function () { bloque.classList.remove("abierto"); });
+
+    bloque.appendChild(fila);
+    bloque.appendChild(desplegable);
+    pintar();
+    return bloque;
+  }
+
+  /* ---------- blog ---------- */
+  var noticias = leer("noticias", null);
+  if (!noticias) { noticias = clonar(DATOS.noticiasDefecto || []); guardar("noticias", noticias); }
+
+  function guardarNoticias() { guardar("noticias", noticias); }
+
+  function pintarNoticias() {
+    var cont = $("noticias-contenedor");
+    if (!cont) return;
+    cont.textContent = "";
+    var ses = getSesion();
+
+    noticias.forEach(function (n) {
+      if (!n.comentarios) n.comentarios = [];
+      var card = el("article", "noticia-card");
+      if (n.imagen) {
+        var img = el("img");
+        img.src = n.imagen;
+        img.alt = n.titulo || "Imagen de la publicación";
+        img.loading = "lazy";
+        card.appendChild(img);
+      }
+      var cuerpo = el("div", "noticia-cuerpo");
+      cuerpo.appendChild(el("div", "noticia-meta",
+        [n.categoria, n.autor, n.fecha].filter(Boolean).join(" • ")));
+      cuerpo.appendChild(el("h3", "", n.titulo));
+      cuerpo.appendChild(el("p", "noticia-texto", n.contenido));
+      cuerpo.appendChild(crearReacciones(n, guardarNoticias));
+
+      if (esAdmin()) {
+        var borrar = el("button", "btn btn-pequeno", "Eliminar publicación");
+        borrar.type = "button";
+        borrar.addEventListener("click", function () {
+          if (!confirm("¿Eliminar esta publicación?")) return;
+          noticias = noticias.filter(function (x) { return x.id !== n.id; });
+          guardarNoticias();
+          pintarNoticias();
+        });
+        cuerpo.appendChild(borrar);
+      }
+
+      var area = el("div", "comentarios-area");
+      area.appendChild(el("h4", "", "Comentarios (" + n.comentarios.length + ")"));
+      n.comentarios.forEach(function (c) {
+        var item = el("div", "comentario-item");
+        item.appendChild(el("strong", "", c.autor));
+        item.appendChild(el("p", "", c.texto));
+        area.appendChild(item);
+      });
+
+      if (ses) {
+        var form = el("div", "comentario-form");
+        var campo = el("input");
+        campo.type = "text";
+        campo.maxLength = 400;
+        campo.placeholder = "Escribe un comentario...";
+        var enviar = el("button", "btn btn-pequeno btn-donar", "Comentar");
+        enviar.type = "button";
+        var publicar = function () {
+          var texto = campo.value.trim();
+          if (!texto) return;
+          n.comentarios.push({ autor: ses.usuario, texto: texto });
+          guardarNoticias();
+          pintarNoticias();
+        };
+        enviar.addEventListener("click", publicar);
+        campo.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); publicar(); } });
+        form.appendChild(campo);
+        form.appendChild(enviar);
+        area.appendChild(form);
+      } else {
+        area.appendChild(el("p", "aviso-solo-lectura", "Inicia sesión o crea tu usuario para comentar."));
+      }
+
+      cuerpo.appendChild(area);
+      card.appendChild(cuerpo);
+      cont.appendChild(card);
+    });
+  }
+
+  var imgNoticia = configurarImagen({
+    btn: "btn-subir-imagen-archivo", quitar: "btn-quitar-pub-img", input: "input-archivo-imagen",
+    nombre: "nombre-archivo-imagen", previa: "vista-previa-pub-img", url: "pub-imagen"
+  });
+
+  var formNoticia = $("form-publicar-noticia");
+  if (formNoticia) {
+    formNoticia.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = $("msg-pub-admin");
+      if (!esAdmin()) { mensaje(msg, "Solo el administrador puede publicar.", false); return; }
+      noticias.unshift({
+        id: nuevoId("noticia"),
+        titulo: $("pub-titulo").value.trim(),
+        categoria: $("pub-categoria").value.trim(),
+        autor: getSesion().usuario,
+        fecha: fechaHoy(),
+        imagen: imgNoticia.valor(),
+        contenido: $("pub-contenido").value.trim(),
+        comentarios: [],
+        reacciones: {}
+      });
+      if (!guardar("noticias", noticias)) {
+        mensaje(msg, "Publicada, pero la imagen es muy pesada para guardarla en este navegador.", false);
+      } else {
+        mensaje(msg, "Publicación creada.");
+      }
+      formNoticia.reset();
+      imgNoticia.reset();
+      pintarNoticias();
+    });
+  }
+
+  /* ---------- protestas ---------- */
+  var protestas = leer("protestas", null);
+  if (!protestas) { protestas = clonar(DATOS.protestasDefecto || []); guardar("protestas", protestas); }
+
+  function guardarProtestas() { guardar("protestas", protestas); }
+
+  function pintarProtestas() {
+    var cont = $("protesta-contenedor");
+    if (!cont) return;
+    cont.textContent = "";
+    protestas.forEach(function (p) {
+      var card = el("div", "card");
+      if (p.imagen) {
+        var img = el("img");
+        img.src = p.imagen;
+        img.alt = p.titulo || "Protesta";
+        img.loading = "lazy";
+        card.appendChild(img);
+      }
+      var cuerpo = el("div", "card-body");
+      cuerpo.appendChild(el("span", "", p.categoria));
+      cuerpo.appendChild(el("h3", "", p.titulo));
+      if (p.mensaje) cuerpo.appendChild(el("p", "protesta-mensaje", p.mensaje));
+      if (p.fecha) cuerpo.appendChild(el("span", "protesta-fecha", p.fecha));
+      cuerpo.appendChild(crearReacciones(p, guardarProtestas));
+      if (esAdmin()) {
+        var borrar = el("button", "btn btn-pequeno btn-borrar-protesta", "Eliminar");
+        borrar.type = "button";
+        borrar.addEventListener("click", function () {
+          if (!confirm("¿Eliminar esta protesta?")) return;
+          protestas = protestas.filter(function (x) { return x.id !== p.id; });
+          guardarProtestas();
+          pintarProtestas();
+        });
+        cuerpo.appendChild(borrar);
+      }
+      card.appendChild(cuerpo);
+      cont.appendChild(card);
+    });
+  }
+
+  var imgProtesta = configurarImagen({
+    btn: "btn-prot-subir-archivo", quitar: "btn-prot-quitar", input: "input-prot-archivo",
+    nombre: "nombre-prot-archivo", previa: "vista-previa-prot", url: "prot-imagen"
+  });
+
+  var btnAbrirProtesta = $("btn-abrir-form-protesta");
+  if (btnAbrirProtesta) {
+    btnAbrirProtesta.addEventListener("click", function () {
+      var panel = $("panel-admin-protesta");
+      var abierto = panel.classList.toggle("visible");
+      btnAbrirProtesta.setAttribute("aria-expanded", abierto ? "true" : "false");
+    });
+  }
+
+  var formProtesta = $("form-publicar-protesta");
+  if (formProtesta) {
+    formProtesta.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = $("msg-prot-admin");
+      if (!esAdmin()) { mensaje(msg, "Solo el administrador puede publicar.", false); return; }
+      protestas.unshift({
+        id: nuevoId("protesta"),
+        titulo: $("prot-titulo").value.trim(),
+        categoria: $("prot-categoria").value.trim(),
+        mensaje: $("prot-mensaje").value.trim(),
+        imagen: imgProtesta.valor(),
+        fecha: fechaHoy(),
+        reacciones: {}
+      });
+      if (!guardar("protestas", protestas)) {
+        mensaje(msg, "Publicada, pero la imagen es muy pesada para guardarla en este navegador.", false);
+      } else {
+        mensaje(msg, "Protesta publicada.");
+      }
+      formProtesta.reset();
+      imgProtesta.reset();
+      pintarProtestas();
+    });
+  }
+
+  /* ---------- mensajes a los administradores ---------- */
+  var imgMensaje = configurarImagen({
+    btn: "btn-subir-admin-img", quitar: "btn-quitar-admin-img", input: "input-archivo-admin-img",
+    nombre: "nombre-archivo-admin-img", previa: "vista-previa-admin-img"
+  });
+
+  function pintarHistorialMensajes() {
+    var cont = $("historial-mensajes-admin");
+    if (!cont) return;
+    cont.textContent = "";
+    var ses = getSesion();
+    if (!ses) return;
+    var todos = leer("mensajes", []);
+    var lista = esAdmin() ? todos : todos.filter(function (m) { return m.usuario === ses.usuario; });
+
+    lista.forEach(function (m) {
+      var item = el("div", "admin-msg-item");
+      if (m.imagen) { var img = el("img"); img.src = m.imagen; img.alt = "Evidencia adjunta"; item.appendChild(img); }
+      item.appendChild(el("strong", "", [m.tipo, m.sector].filter(Boolean).join(" • ")));
+      item.appendChild(el("h4", "", m.asunto));
+      item.appendChild(el("p", "", m.detalle));
+      item.appendChild(el("p", "", "Enviado por " + m.remitente + " — " + m.fecha));
+
+      if (esAdmin()) {
+        var acciones = el("div", "admin-msg-acciones");
+        var publicar = el("button", "btn btn-pequeno btn-donar", "Publicar en el blog");
+        publicar.type = "button";
+        publicar.addEventListener("click", function () {
+          noticias.unshift({
+            id: nuevoId("noticia"), titulo: m.asunto, categoria: m.tipo,
+            autor: ses.usuario, fecha: fechaHoy(), imagen: m.imagen || "",
+            contenido: m.detalle, comentarios: [], reacciones: {}
+          });
+          guardarNoticias();
+          pintarNoticias();
+        });
+        var borrar = el("button", "btn btn-pequeno", "Eliminar");
+        borrar.type = "button";
+        borrar.addEventListener("click", function () {
+          guardar("mensajes", leer("mensajes", []).filter(function (x) { return x.id !== m.id; }));
+          pintarHistorialMensajes();
+        });
+        acciones.appendChild(publicar);
+        acciones.appendChild(borrar);
+        item.appendChild(acciones);
+      }
+      cont.appendChild(item);
+    });
+  }
+
+  var formMensaje = $("form-mensaje-admin");
+  if (formMensaje) {
+    formMensaje.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = $("msg-admin-feedback");
+      var ses = getSesion();
+      if (!ses) { mensaje(msg, "Inicia sesión para enviar mensajes.", false); return; }
+      var lista = leer("mensajes", []);
+      lista.unshift({
+        id: nuevoId("msg"),
+        usuario: ses.usuario,
+        remitente: $("admin-remitente").value.trim(),
+        tipo: $("admin-tipo-evento").value,
+        sector: $("admin-sector").value.trim(),
+        asunto: $("admin-asunto").value.trim(),
+        detalle: $("admin-detalle").value.trim(),
+        imagen: imgMensaje.valor(),
+        fecha: fechaHoy()
+      });
+      if (!guardar("mensajes", lista)) {
+        lista[0].imagen = "";
+        guardar("mensajes", lista);
+        mensaje(msg, "Mensaje enviado (la imagen era muy pesada y no se adjuntó).");
+      } else {
+        mensaje(msg, "Mensaje enviado a los administradores.");
+      }
+      formMensaje.reset();
+      imgMensaje.reset();
+      $("admin-remitente").value = ses.usuario;
+      pintarHistorialMensajes();
+    });
+  }
+
+  /* ---------- donaciones ---------- */
+  var btnDonar = $("btn-quiero-donar");
+  if (btnDonar) {
+    btnDonar.addEventListener("click", function () {
+      var panel = $("panel-cuentas-donacion");
+      var oculto = panel.style.display === "none";
+      panel.style.display = oculto ? "block" : "none";
+      btnDonar.setAttribute("aria-expanded", oculto ? "true" : "false");
+    });
+  }
+
+  function copiarTexto(texto) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(texto);
+    }
+    return new Promise(function (ok, fallo) {
+      var t = document.createElement("textarea");
+      t.value = texto;
+      t.style.position = "fixed";
+      t.style.opacity = "0";
+      document.body.appendChild(t);
+      t.select();
+      try { document.execCommand("copy") ? ok() : fallo(); } catch (err) { fallo(err); }
+      document.body.removeChild(t);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".btn-copiar-cuenta"), function (b) {
+    b.addEventListener("click", function () {
+      var original = b.textContent;
+      copiarTexto(b.getAttribute("data-copiar") || "").then(function () {
+        b.textContent = "¡Copiado!";
+      }, function () {
+        b.textContent = "No se pudo copiar";
+      }).then(function () {
+        setTimeout(function () { b.textContent = original; }, 1600);
+      });
+    });
+  });
+
+  /* ---------- estado de sesión en toda la página ---------- */
+  function mostrar(nodo, visible, tipo) {
+    if (nodo) nodo.style.display = visible ? (tipo || "") : "none";
+  }
+
+  function actualizarSesion() {
+    var ses = getSesion();
+    var admin = !!(ses && ses.rol === "admin");
+
+    var badge = $("badge-usuario-activo");
+    if (badge) {
+      badge.textContent = ses ? (admin ? "ADMIN · " : "👤 ") + ses.usuario : "";
+      badge.classList.toggle("es-admin", admin);
+      mostrar(badge, !!ses);
+    }
+    mostrar($("btn-top-login"), !ses);
+    mostrar($("btn-top-crear"), !ses);
+    mostrar($("btn-top-cerrar"), !!ses);
+    mostrar($("btn-blog-login"), !ses);
+    mostrar($("btn-blog-crear"), !ses);
+
+    var texto = $("texto-estado-sesion");
+    if (texto) {
+      texto.textContent = ses
+        ? (admin
+          ? "Sesión de administrador activa: puedes publicar en el blog y en protestas."
+          : "Sesión iniciada como " + ses.usuario + ": ya puedes comentar y enviar mensajes a los administradores.")
+        : "Modo visitante: puedes ver y reaccionar a las publicaciones, pero debes iniciar sesión o crear tu usuario para comentar o enviar mensajes.";
+    }
+
+    var panelBlog = $("panel-admin-blog");
+    if (panelBlog) panelBlog.classList.toggle("visible", admin);
+    var barraProtesta = $("barra-admin-protesta");
+    if (barraProtesta) barraProtesta.classList.toggle("visible", admin);
+
+    /* formulario de mensajes: solo con sesión */
+    if (formMensaje) {
+      var aviso = $("aviso-bloqueo-admin");
+      if (aviso) {
+        aviso.textContent = ses ? "" : "Para enviar mensajes a los administradores debes iniciar sesión o crear tu usuario.";
+        aviso.style.display = ses ? "none" : "";
+      }
+      Array.prototype.forEach.call(formMensaje.querySelectorAll("input, select, textarea, button"), function (c) {
+        c.disabled = !ses;
+      });
+      var remitente = $("admin-remitente");
+      if (remitente && ses && !remitente.value) remitente.value = ses.usuario;
+    }
+
+    pintarNoticias();
+    pintarProtestas();
+    pintarHistorialMensajes();
+  }
+
+  /* ---------- fondo de patrón y video principal ---------- */
+  if (DATOS.patronUrl) {
+    document.documentElement.style.setProperty("--patron-url", 'url("' + DATOS.patronUrl + '")');
+  }
+
+  (function () {
+    var video = document.querySelector(".video-hero-principal");
+    if (!video) return;
+    video.muted = true;
+    var intentar = function () { var p = video.play(); if (p && p.catch) p.catch(function () { /* ignorar */ }); };
+    intentar();
+    ["touchstart", "click"].forEach(function (ev) {
+      document.addEventListener(ev, function once() {
+        intentar();
+        document.removeEventListener(ev, once);
+      }, { passive: true });
+    });
+  })();
+
+  actualizarSesion();
+})();
